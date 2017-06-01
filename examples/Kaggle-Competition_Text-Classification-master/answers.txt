@@ -1,0 +1,45 @@
+Name: Wei Xu
+Uniquename: weixu
+
+
+/*********************************************************/
+Accuracy of my Naive Bayes classifier:
+
+1. Only Tokenization: 0.719388
+2. Also remove stopwords(without stemming): 0.724490
+3. Also stem the words(without stop words removing): 0.765306
+4. Also remove the stopwords and stem the words: 0.714286
+
+/*********************************************************/
+The top 10 words with highest conditional probability in each class
+(listed in reverse order)
+
+1. In “lie” class
+
+and 0.026999432785
+she 0.0256381168463
+to 0.0251843448667
+is 0.0239364719229
+i 0.021667612025
+a 0.0178105501985
+he 0.01622234827
+the 0.0156551332955
+me 0.0114577424844
+her 0.0110039705048
+
+2. In “True” class
+
+and 0.0312850205454
+i 0.0289503175196
+we 0.024000747105
+to 0.0195181172955
+she 0.018023907359
+the 0.0174635786328
+is 0.0171834142697
+my 0.0161561449384
+me 0.0153156518491
+a 0.015035487486
+
+Discussion: Since we do not remove the stop words, it’s expected that the words with highest conditional probability will be these stop words which have high occurrence.
+
+/*********************************************************/
