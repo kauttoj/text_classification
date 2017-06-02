@@ -13,6 +13,8 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.cross_validation import KFold
 from sklearn.metrics import confusion_matrix, f1_score
+from sklearn import svm
+from sklearn.grid_search import GridSearchCV
 
 NEWLINE = '\n'
 
@@ -24,7 +26,7 @@ SOURCES = [
     #('data/easy_ham',    HAM),
     #('data/hard_ham',    HAM),
     #('data/beck-s',      HAM),
-    #('data/farmer-d',    HAM),
+    ('data/farmer-d',    HAM),
     ('data/kaminski-v',  HAM),
     #('data/kitchen-l',   HAM),
     ('data/lokay-m',     HAM),
@@ -73,12 +75,23 @@ for path, classification in SOURCES:
 
 data = data.reindex(numpy.random.permutation(data.index))
 
-pipeline = Pipeline([
-    ('count_vectorizer',   CountVectorizer(ngram_range=(1, 2))),
+cPara_range = [1.0]
+#cPara_range = list(np.logspace(-2,2,10)) # release this annotation and kill the previous sentence to run grid search
+parameters = {'C':cPara_range}
+clf = svm.SVC(kernel = 'linear')
+SVM_model = GridSearchCV(clf, param_grid = parameters)
+
+pipeline1 = Pipeline([
+    ('count_vectorizer',   CountVectorizer(ngram_range=(1, 2))),    
     ('classifier',         MultinomialNB())
 ])
+    
+pipeline2 = Pipeline([
+    ('count_vectorizer',   CountVectorizer(ngram_range=(1, 2))),    
+    ('classifier',         SVM_model)
+])
 
-k_fold = KFold(n=len(data), n_folds=6)
+k_fold = KFold(n=len(data), n_folds=10)
 scores = []
 confusion = numpy.array([[0, 0], [0, 0]])
 for train_indices, test_indices in k_fold:
@@ -88,8 +101,8 @@ for train_indices, test_indices in k_fold:
     test_text = data.iloc[test_indices]['text'].values
     test_y = data.iloc[test_indices]['class'].values.astype(str)
 
-    pipeline.fit(train_text, train_y)
-    predictions = pipeline.predict(test_text)
+    pipeline2.fit(train_text, train_y)
+    predictions = pipeline2.predict(test_text)
 
     confusion += confusion_matrix(test_y, predictions)
     score = f1_score(test_y, predictions, pos_label=SPAM)
