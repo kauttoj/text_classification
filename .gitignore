@@ -4,3 +4,4 @@ examples/classifying_text_master/data/
 examples/doc2vec_1/data/
 *.bin
 data/
+VowpalWabbit/
