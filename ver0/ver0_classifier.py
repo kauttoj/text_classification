@@ -18,54 +18,79 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn import svm
+from sklearn.linear_model import LogisticRegression
 
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import confusion_matrix, f1_score
+from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 #from vowpalwabbit import pyvw
 #from vowpalwabbit.sklearn_vw import VWClassifier
 
-def read_files(path):
-    for root, dir_names, file_names in os.walk(path):
-        for path in dir_names:
-            read_files(os.path.join(root, path))
-        for file_name in file_names:
-            file_path = os.path.join(root, file_name)
-            if os.path.isfile(file_path):
-                past_header, lines = False, []
-                f = open(file_path, encoding="latin-1")
-                for line in f:
-                    if past_header and len(line)>0 and line is not '\n':
-                        line=line.rstrip()
-                        lines.append(line)
-                    else:
-                        past_header = True                        
-                f.close()
-                content = ' '.join(lines)
-                yield file_path, content
+import get_my_data
 
 
-def build_data_frame(path, classification):
-    rows = []
-    index = []
-    for file_name, text in read_files(path):
-        if len(text)>=1000:
-            rows.append({'text': text, 'mylabel': classification})
-            index.append(file_name)
-    if len(rows)<50:
-        raise('ERROR: less than 50 samples!')
-    data_frame = DataFrame(rows, index=index)
-    return data_frame
+def show_most_informative_features(model, text=None, n=20):
+    """
+    Accepts a Pipeline with a classifer and a TfidfVectorizer and computes
+    the n most informative features of the model. If text is given, then will
+    compute the most informative features for classifying that text.
 
-def median(arr):                
+    Note that this function will only work on linear models with coefs_
+    """
+    # Extract the vectorizer and the classifier from the pipeline
+    vectorizer = model.named_steps['vectorizer']
+    classifier = model.named_steps['classifier']
+
+    # Check to make sure that we can perform this computation
+    if not hasattr(classifier, 'coef_'):
+        raise TypeError(
+            "Cannot compute most informative features on {} model.".format(
+                classifier.__class__.__name__
+            )
+        )
+
+    if text is not None:
+        # Compute the coefficients for the text
+        tvec = model.transform([text]).toarray()
+    else:
+        # Otherwise simply use the coefficients
+        tvec = classifier.coef_
+
+    # Zip the feature names with the coefs and sort
+    coefs = sorted(
+        zip(tvec[0], vectorizer.get_feature_names()),
+        key=itemgetter(0), reverse=True
+    )
+
+    topn  = zip(coefs[:n], coefs[:-(n+1):-1])
+
+    # Create the output string to return
+    output = []
+
+    # If text, add the predicted value to the output.
+    if text is not None:
+        output.append("\"{}\"".format(text))
+        output.append("Classified as: {}".format(model.predict([text])))
+        output.append("")
+
+    # Create two columns with most negative and most positive features.
+    for (cp, fnp), (cn, fnn) in topn:
+        output.append(
+            "{:0.4f}{: >15}    {:0.4f}{: >15}".format(cp, fnp, cn, fnn)
+        )
+
+    return "\n".join(output)
+
+
+def median(arr,ind):                
     try:
         arr=sorted(arr)
         return arr[len(arr)//2]
     except:                    
-        return arr[0]
-def average_params(params):
+        return arr[ind]
+def average_params(params,ind):
     average_params = params[0].copy() 
     k=0                        
     for key in average_params.keys():
@@ -74,54 +99,13 @@ def average_params(params):
         val=[]
         for a in params:
             val.append(a[key])            
-        average_params[key]=[median(val)]
+        average_params[key]=[median(val,ind)]
     return average_params
-
-def shuffle(df, n=1, axis=0):     
-    print('\n\n!!!!! WARNING: shuffling data for testing purposes !!!!!\n')
-    df = df.copy()
-    for _ in range(n):
-        df.apply(numpy.random.shuffle, axis=axis)
-    return df
-
-def getdata():
-    """
-    DATA
-    """
-    SOURCES=[
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/football','FOOTBALL'),
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/rugby','RUGBY')                    
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
-        ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
-        ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
-    ]
-    
-    data = DataFrame({'text': [], 'mylabel': []})
-    for path, classification in SOURCES:
-        data = data.append(build_data_frame(path, classification))
-    
-    data = data.reindex(numpy.random.permutation(data.index))
-    
-    labels = data.mylabel.unique()
-    counts=[-1]*len(labels)
-    for i in range(len(counts)):
-        counts[i]=len(data[data.mylabel==labels[i]])
-        
-    M=min(counts)
-    for i in range(len(counts)):
-        ind=data[data.mylabel==labels[i]].index
-        data=data.drop(ind[M:])
-    
-    print('\n-- Total',len(counts),'labels with',M,'samples each')
-    
-    #data = shuffle(data)
-    
-    return data
 
 if __name__ == '__main__':
     
     print('\n--- Parsing data ---')
-    data=getdata()
+    data=get_my_data.getdata()
         
     """
     MODEL
@@ -130,23 +114,26 @@ if __name__ == '__main__':
     Forest_model = RandomForestClassifier()
     SGD_model = SGDClassifier(penalty='l2')
     Bayes_model=MultinomialNB()
+    logreg_model = LogisticRegression()
     
     """
     PARAMETERS
     """
     parameters = {
-        'vect__max_df': [0.70,0.9],
-        'vect__max_features': [None],
-        'vect__ngram_range': [(1,2),(1,3),(1,4)],  # unigrams or bigrams
+        'vect__max_df': [0.75],
+        'vect__max_features': [40000],
+        'vect__ngram_range': [(1,2)],  # n-grams
         'vect__stop_words': ['english'],
-        'tfidf__use_idf': [True,False],
+        'tfidf__use_idf': [True],
         'tfidf__norm': ['l2'],
         #'SGD__alpha': (0.0001,0.00001, 0.000001),
         #'SGD__penalty': ['l2'],
-        #'SGD__n_iter': [50],
-        'svm__C': numpy.logspace(-2,2,10).tolist(),
+        #'SGD__loss': ['hinge'],
+        #'SGD__n_iter': [100],
+        #'svm__C': numpy.logspace(-2,5,7).tolist(),
         #'bayes__alpha': [0.75]
         #'forest__n_estimators':[10,15,20,25]
+        'logreg__C': numpy.logspace(4,6,5).tolist(),
     }
         
     """
@@ -155,7 +142,7 @@ if __name__ == '__main__':
     pipeline = Pipeline([
         ('vect', CountVectorizer()),    
         ('tfidf', TfidfTransformer()),
-        ('svm',SVM_model)
+        ('logreg',logreg_model)
     ])      
         
     grid_search = GridSearchCV(pipeline, parameters, n_jobs=3, verbose=1)
@@ -167,11 +154,12 @@ if __name__ == '__main__':
     scores = []
     confusion = numpy.array([[0, 0], [0, 0]])    
     best_parameters=[]
+    best_score=(-1,-1)
     k=0        
     print('\n---- Starting first loops ----')
     for train_indices, test_indices in k_fold.split(data):
         k+=1
-        print('...split',k)
+        print('...fold',k)
         train_text = data.iloc[train_indices]['text'].values
         train_y = data.iloc[train_indices]['mylabel'].values.astype(str)
     
@@ -189,6 +177,8 @@ if __name__ == '__main__':
         confusion += confusion_matrix(test_y, predictions)
         score = f1_score(test_y, predictions, pos_label=data.iloc[0][0])
         scores.append(score)
+        if score>best_score[0]:
+            best_score=(score,k)            
         
         print('.....score was ',score)
         print('')                   
@@ -201,17 +191,19 @@ if __name__ == '__main__':
     print('Confusion matrix:')
     print(confusion_old)                          
     
-    median_parameters = average_params(best_parameters)
+    median_parameters = average_params(best_parameters,best_score[1])
     
     grid_search = GridSearchCV(pipeline, median_parameters, n_jobs=3, verbose=1)
         
     scores = []
+    recalls=[]
+    precisions=[]
     confusion = numpy.array([[0, 0], [0, 0]])
     k=0        
     print('\n\n---- Starting FINAL loops with optimal parameters ----')
     for train_indices, test_indices in k_fold.split(data):
         k+=1
-        print('...split',k)
+        print('...fold',k)
         train_text = data.iloc[train_indices]['text'].values
         train_y = data.iloc[train_indices]['mylabel'].values.astype(str)
     
@@ -228,10 +220,17 @@ if __name__ == '__main__':
         score = f1_score(test_y, predictions, pos_label=data.iloc[0][0])
         scores.append(score)
         
+        precision = precision_score(test_y, predictions, average='macro')
+        precisions.append(precision)
+        recall = recall_score(test_y, predictions, average='macro')        
+        recalls.append(recall)
+        
         print('.....score was ',score)
         print('')        
     
     print('\nTotal texts classified:', len(data))
     print('Score:', sum(scores)/len(scores))
+    print('Precision:', sum(precisions)/len(precisions))
+    print('Recall:', sum(recalls)/len(recalls))
     print('Confusion matrix:')
     print(confusion)
