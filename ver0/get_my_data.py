@@ -7,6 +7,66 @@ Created on Thu Jun 22 09:52:01 2017
 from pandas import DataFrame
 import os
 import numpy
+import re
+import nltk
+import string
+#from nltk.corpus import wordnet as wn
+#from nltk.corpus import stopwords
+from nltk.stem import SnowballStemmer
+#from nltk.stem import WordNetLemmatizer
+import string
+
+translate_table = dict((ord(char), ' ') for char in string.punctuation)   
+
+#wordnet_lemmatizer = WordNetLemmatizer('finnish')
+snowball_stemmer = SnowballStemmer('finnish')
+stopword_list = nltk.corpus.stopwords.words('finnish')
+
+def tokenize_text(text,skip=0):    
+    if skip==0:
+        text = text.lower()
+        #remove the punctuation using the character deletion step of translate
+        text = text.translate(translate_table)        
+    tokens = nltk.word_tokenize(text) 
+    tokens = [token.strip() for token in tokens]
+    return tokens       
+
+def remove_special_characters(text):
+    tokens = tokenize_text(text)
+    pattern = re.compile('[{}]'.format(re.escape(string.punctuation)))
+    filtered_tokens = filter(None, [pattern.sub('', token) for token in tokens])
+    filtered_text = ' '.join(filtered_tokens)
+    return filtered_text
+        
+def remove_stopwords(text):
+    tokens = tokenize_text(text)
+    filtered_tokens = [token for token in tokens if token not in stopword_list]
+    filtered_text = ' '.join(filtered_tokens)    
+    return filtered_text   
+
+def stemmer(text):
+    
+    text=tokenize_text(text,skip=1)        
+    text=[snowball_stemmer.stem(a) for a in text]
+    return ' '.join(text)
+
+def lemmer(text):
+    
+    text=tokenize_text(text,skip=1)        
+    text=[wordnet_lemmatizer.stem(a) for a in text]
+    return ' '.join(text)
+
+def normalize_corpus(corpus):
+    
+    normalized_corpus = corpus.copy()    
+    for i,val in normalized_corpus.iterrows():
+        text = val['text']
+        text = remove_special_characters(text)
+        text = remove_stopwords(text)
+        #text = stemmer(text)        
+        normalized_corpus.set_value(i,'text',text)
+            
+    return normalized_corpus
 
 def read_files(path):
     for root, dir_names, file_names in os.walk(path):
@@ -16,7 +76,7 @@ def read_files(path):
             file_path = os.path.join(root, file_name)
             if os.path.isfile(file_path):
                 past_header, lines = False, []
-                f = open(file_path, encoding="latin-1")
+                f = open(file_path, encoding='utf-8')
                 for line in f:
                     if past_header and len(line)>0 and line is not '\n':
                         line=line.rstrip()
@@ -55,13 +115,17 @@ def getdata():
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/football','FOOTBALL'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/rugby','RUGBY')                    
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
-        ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
-        ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
+        (r'D:\JanneK\Documents\text_classification\data\TALOUS','TALOUS'), 
+        (r'D:\JanneK\Documents\text_classification\data\TERVEYS','TERVEYS')    
     ]
     
     data = DataFrame({'text': [], 'mylabel': []})
     for path, classification in SOURCES:
         data = data.append(build_data_frame(path, classification))
+        
+    data = normalize_corpus(data)
     
     data = data.reindex(numpy.random.permutation(data.index))
     
@@ -80,3 +144,12 @@ def getdata():
     #data = shuffle(data)
     
     return data
+
+
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Aug 26 20:45:10 2016
+
+@author: DIP
+"""
+

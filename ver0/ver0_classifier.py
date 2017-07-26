@@ -21,7 +21,7 @@ from sklearn import svm
 from sklearn.linear_model import LogisticRegression
 
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
+from sklearn import metrics
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
@@ -102,6 +102,26 @@ def average_params(params,ind):
         average_params[key]=[median(val,ind)]
     return average_params
 
+def get_metrics(true_labels, predicted_labels):
+    
+    a = numpy.round(metrics.accuracy_score(true_labels,predicted_labels),3)
+    print('Accuracy:',a)
+    
+    p = numpy.round(metrics.precision_score(true_labels,predicted_labels,average='weighted'),3) 
+    print('Precision:',p)
+    
+    r = numpy.round(metrics.recall_score(true_labels,predicted_labels,average='weighted'),3)    
+    print('Recall:', r)
+    
+    s = numpy.round(metrics.f1_score(true_labels,predicted_labels,average='weighted'),3)
+    print('F1 Score:', s)
+    
+    cm = metrics.confusion_matrix(true_labels, predicted_labels)
+    print(cm)
+    print('\n')    
+    
+    return a,p,r,s,cm
+
 if __name__ == '__main__':
     
     print('\n--- Parsing data ---')
@@ -150,11 +170,17 @@ if __name__ == '__main__':
     START LOOP
     """
     k_fold = KFold(n_splits=5,shuffle=True, random_state=666)
+        
+    accuracys=[]
+    precisions=[]
+    recalls=[]
+    scores=[]
     
-    scores = []
     confusion = numpy.array([[0, 0], [0, 0]])    
+    
     best_parameters=[]
     best_score=(-1,-1)
+    
     k=0        
     print('\n---- Starting first loops ----')
     for train_indices, test_indices in k_fold.split(data):
@@ -172,15 +198,22 @@ if __name__ == '__main__':
         
         best_parameters.append(grid_search.best_estimator_.get_params())
         
-        predictions = grid_search.predict(test_text)
-    
-        confusion += confusion_matrix(test_y, predictions)
-        score = f1_score(test_y, predictions, pos_label=data.iloc[0][0])
-        scores.append(score)
-        if score>best_score[0]:
-            best_score=(score,k)            
+        raise('STOP')
         
-        print('.....score was ',score)
+        predictions = grid_search.predict(test_text)            
+            
+        accuracy,precision,recall,score,confusion1 = get_metrics(test_y, predictions)
+        
+        accuracys.append(accuracy)
+        scores.append(score)
+        precisions.append(precision)
+        recalls.append(recall)
+        
+        confusion += confusion1
+        
+        if score>best_score[0]:
+            best_score=(score,k)          
+        
         print('')                   
 
     scores_old = scores
@@ -193,12 +226,14 @@ if __name__ == '__main__':
     
     median_parameters = average_params(best_parameters,best_score[1])
     
-    grid_search = GridSearchCV(pipeline, median_parameters, n_jobs=3, verbose=1)
+    grid_search = GridSearchCV( pipeline, median_parameters, n_jobs=3, verbose=1,cv=2)
         
-    scores = []
-    recalls=[]
+    accuracys=[]
     precisions=[]
+    recalls=[]
+    scores=[]    
     confusion = numpy.array([[0, 0], [0, 0]])
+    
     k=0        
     print('\n\n---- Starting FINAL loops with optimal parameters ----')
     for train_indices, test_indices in k_fold.split(data):
@@ -216,16 +251,15 @@ if __name__ == '__main__':
         
         predictions = grid_search.predict(test_text)
     
-        confusion += confusion_matrix(test_y, predictions)
-        score = f1_score(test_y, predictions, pos_label=data.iloc[0][0])
-        scores.append(score)
+        accuracy,precision,recall,score,confusion1 = get_metrics(test_y, predictions)
         
-        precision = precision_score(test_y, predictions, average='macro')
+        accuracys.append(accuracy)
+        scores.append(score)
         precisions.append(precision)
-        recall = recall_score(test_y, predictions, average='macro')        
         recalls.append(recall)
         
-        print('.....score was ',score)
+        confusion += confusion1
+        
         print('')        
     
     print('\nTotal texts classified:', len(data))

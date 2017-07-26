@@ -5,3 +5,8 @@ examples/doc2vec_1/data/
 *.bin
 data/
 VowpalWabbit/
+*.p
+examples/deep_classification_reuters/tempfile_full.txt
+examples/deep_classification_reuters/tempfile_full_vector.txt
+examples/deep_classification_reuters/tempfile.txt
+examples/deep_classification_reuters/reuters21578/
