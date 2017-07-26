@@ -10,3 +10,6 @@ examples/deep_classification_reuters/tempfile_full.txt
 examples/deep_classification_reuters/tempfile_full_vector.txt
 examples/deep_classification_reuters/tempfile.txt
 examples/deep_classification_reuters/reuters21578/
+.project
+.pydevproject
+.settings/org.eclipse.core.resources.prefs
