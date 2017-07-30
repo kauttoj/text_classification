@@ -9,6 +9,7 @@ import os
 import numpy
 import re
 import nltk
+from nltk.tokenize import WhitespaceTokenizer
 import string
 #from nltk.corpus import wordnet as wn
 #from nltk.corpus import stopwords
@@ -26,14 +27,19 @@ def tokenize_text(text,skip=0):
     if skip==0:
         text = text.lower()
         #remove the punctuation using the character deletion step of translate
-        text = text.translate(translate_table)        
-    tokens = nltk.word_tokenize(text) 
+        #text = text.translate(translate_table)        
+    #tokens = text.split(' ')
+    tokens = WhitespaceTokenizer().tokenize(text) 
     tokens = [token.strip() for token in tokens]
     return tokens       
 
 def remove_special_characters(text):
     tokens = tokenize_text(text)
-    pattern = re.compile('[{}]'.format(re.escape(string.punctuation)))
+    punc = string.punctuation
+    #punc=punc.replace('.','')
+    #punc=punc.replace('?','')
+    #punc=punc.replace('!','')
+    pattern = re.compile('[{}]'.format(re.escape(punc)))
     filtered_tokens = filter(None, [pattern.sub('', token) for token in tokens])
     filtered_text = ' '.join(filtered_tokens)
     return filtered_text
@@ -62,7 +68,7 @@ def normalize_corpus(corpus):
     for i,val in normalized_corpus.iterrows():
         text = val['text']
         text = remove_special_characters(text)
-        text = remove_stopwords(text)
+        #text = remove_stopwords(text)
         #text = stemmer(text)        
         normalized_corpus.set_value(i,'text',text)
             
@@ -117,8 +123,8 @@ def getdata():
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
-        (r'D:\JanneK\Documents\text_classification\data\TALOUS','TALOUS'), 
-        (r'D:\JanneK\Documents\text_classification\data\TERVEYS','TERVEYS')    
+        (r'C:\Users\Jannek\Documents\git_repos\text_classification\data\TALOUS','TALOUS'), 
+        (r'C:\Users\Jannek\Documents\git_repos\text_classification\data\TERVEYS','TERVEYS')    
     ]
     
     data = DataFrame({'text': [], 'mylabel': []})

@@ -5,12 +5,16 @@ Created on Wed May 31 19:23:33 2017
 http://zacstewart.com/2015/04/28/document-classification-with-scikit-learn.html
 """
 
-import os
+
 import numpy
+import re
 from pandas import DataFrame
 from time import time
 import pickle
 import matplotlib.pyplot as plt
+
+from nltk import tokenize
+# the mock-0.3.1 dir contains testcase.py, testutils.py & mock.py
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -24,68 +28,22 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn import metrics
 
-from sklearn.decomposition import NMF,TruncatedSVD
+from sklearn.decomposition import NMF,TruncatedSVD,LatentDirichletAllocation
 
 from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
+
+from itertools import tee, islice
 #from vowpalwabbit import pyvw
 #from vowpalwabbit.sklearn_vw import VWClassifier
 
+import os
+import sys
+HOME=os.getcwd()
+os.chdir(HOME+'\\..')
+sys.path.insert(0,os.getcwd())
+os.chdir(HOME)
 import get_my_data
-
-
-def show_most_informative_features(model, text=None, n=20):
-    """
-    Accepts a Pipeline with a classifer and a TfidfVectorizer and computes
-    the n most informative features of the model. If text is given, then will
-    compute the most informative features for classifying that text.
-
-    Note that this function will only work on linear models with coefs_
-    """
-    # Extract the vectorizer and the classifier from the pipeline
-    vectorizer = model.named_steps['vectorizer']
-    classifier = model.named_steps['classifier']
-
-    # Check to make sure that we can perform this computation
-    if not hasattr(classifier, 'coef_'):
-        raise TypeError(
-            "Cannot compute most informative features on {} model.".format(
-                classifier.__class__.__name__
-            )
-        )
-
-    if text is not None:
-        # Compute the coefficients for the text
-        tvec = model.transform([text]).toarray()
-    else:
-        # Otherwise simply use the coefficients
-        tvec = classifier.coef_
-
-    # Zip the feature names with the coefs and sort
-    coefs = sorted(
-        zip(tvec[0], vectorizer.get_feature_names()),
-        key=itemgetter(0), reverse=True
-    )
-
-    topn  = zip(coefs[:n], coefs[:-(n+1):-1])
-
-    # Create the output string to return
-    output = []
-
-    # If text, add the predicted value to the output.
-    if text is not None:
-        output.append("\"{}\"".format(text))
-        output.append("Classified as: {}".format(model.predict([text])))
-        output.append("")
-
-    # Create two columns with most negative and most positive features.
-    for (cp, fnp), (cn, fnn) in topn:
-        output.append(
-            "{:0.4f}{: >15}    {:0.4f}{: >15}".format(cp, fnp, cn, fnn)
-        )
-
-    return "\n".join(output)
-
 
 def median(arr,ind):                
     try:
@@ -161,17 +119,54 @@ data=get_my_data.getdata()
 """
 PIPELINE
 """
-
-vect = CountVectorizer(max_df=0.75,max_features = 20000,ngram_range=(1,3))    
-tfidf = TfidfTransformer();
-model = LogisticRegression()
-#decomposer = TruncatedSVD(2)
-decomposer = NMF(n_components=50, random_state=1)
+def print_top_words(model, feature_names, n_top_words):
+    for topic_idx, topic in enumerate(model.components_):
+        print("Topic #%d:" % topic_idx)
+        print(" ".join([feature_names[i] for i in topic.argsort()[:-n_top_words - 1:-1]]))
+    print()
     
+def custom_analyzer(doc):
+    #print('')
+    for ln in tokenize.sent_tokenize(doc):
+        terms = re.findall(r'\w{2,}', ln)
+        for ngramLength in range(1, 1+1):
+            # find and return all ngrams
+            # for ngram in zip(*[terms[i:] for i in range(3)]): <-- solution without a generator (works the same but has higher memory usage)
+            for ngram in zip(*[islice(seq, i, len(terms)) for i, seq in enumerate(tee(terms, ngramLength))]): # <-- solution using a generator
+                ngram = ' '.join(ngram)
+                yield ngram
+
+vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,3))    
+#vect = CountVectorizer(analyzer=custom_analyzer,max_df=0.85,min_df=0,max_features = 30000,ngram_range=(1,3))    
+
+# test if it works
+vect.fit_transform(data.iloc[0:5]['text'].values)
+
+tfidf = TfidfTransformer();
+#model = LogisticRegression()
+#model = svm.SVC(kernel = 'linear',C = 0.001)
+model = SGDClassifier(penalty='l2',loss='log',n_iter=150)
+#model = RandomForestClassifier(n_estimators=30)
+decomposer = TruncatedSVD(200,n_iter=8)
+#decomposer = LatentDirichletAllocation(n_topics=10, max_iter=10,learning_method='online',learning_offset=50.,random_state=1)
+#decomposer = NMF(n_components=50, random_state=1,alpha=.1, l1_ratio=.5)
+   
+"""
+X = data.iloc[:]['text'].values
+y = data.iloc[:]['mylabel'].values.astype(str)
+
+dat = vect.fit_transform(X)
+dat = tfidf.fit_transform(dat)
+dat = decomposer.fit_transform(dat)  
+
+for a in numpy.unique(y):
+    plt.scatter(dat[y==a,0],dat[y==a,1])
+"""
+ 
 """
 START LOOP
 """
-k_fold = KFold(n_splits=5,shuffle=True, random_state=666)
+k_fold = StratifiedKFold(n_splits=10,shuffle=True, random_state=666)
     
 accuracys=[]
 precisions=[]
@@ -185,7 +180,7 @@ best_score=(-1,-1)
 
 k=0        
 print('\n---- Starting first loops ----')
-for train_indices, test_indices in k_fold.split(data):
+for train_indices, test_indices in k_fold.split(data,data['mylabel']):
     k+=1
     print('...fold',k)
     
@@ -213,6 +208,10 @@ for train_indices, test_indices in k_fold.split(data):
     dat = decomposer.transform(dat)      
     
     predictions = model.predict(X=dat)
+    
+    #print("\nTopics in decomposed model:")
+    #tfidf_feature_names = tfidf.get_feature_names()
+    #print_top_words(decomposer, tfidf_feature_names,10)
         
     accuracy,precision,recall,score,confusion1 = get_metrics(test_y, predictions)
     
@@ -226,7 +225,8 @@ for train_indices, test_indices in k_fold.split(data):
     if score>best_score[0]:
         best_score=(score,k)          
     
-    print('')                   
+    print('')         
+            
 
 scores_old = scores
 confusion_old = confusion

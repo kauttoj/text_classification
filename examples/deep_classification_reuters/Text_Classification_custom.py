@@ -56,10 +56,10 @@ random.seed(1000)
 #    'ex_': ('Exchanges', 'all-exchanges-strings.lc.txt')
 #}
 SOURCES=[
-    ('D:/JanneK/Documents/text_classification/data/bbc/business','business'),
-    ('D:/JanneK/Documents/text_classification/data/bbc/entertainment','entertainment'),
-    ('D:/JanneK/Documents/text_classification/data/bbc/politics','politics'),
-    ('D:/JanneK/Documents/text_classification/data/bbc/sport','sport')
+    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','business'),
+    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/entertainment','entertainment'),
+    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','politics'),
+    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/sport','sport')
 ]
 # Word2Vec number of features
 num_features = 200
@@ -176,9 +176,9 @@ if 1: #os.path.isfile(filename):
 #    w2v_model = Word2Vec(size=num_features, min_count=1, window=15, workers=cpu_count())
 #    w2v_model.init_sims(replace=True)
 #    w2v_model.save('D:/JanneK/Documents/text_classification/data/bbc/word2vec_model')
-    outfile=r'D:/JanneK/Documents/text_classification/data/bbc/fasttext_model'
+    outfile=r'C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/fasttext_model'
  
-    w2v_model = FastText.train(corpus_file=corpus,output_file=outfile,ft_path=r'D:/JanneK/Documents/text_classification/fastText', model='cbow', size=num_features, alpha=0.025, window=10, min_count=2,loss='ns', sample=1e-3, negative=5, iter=5, min_n=3, max_n=6, sorted_vocab=1, threads=3)
+    w2v_model = FastText.train(corpus_file=corpus,output_file=outfile,ft_path=r'C:/Users/Jannek/Documents/git_repos/text_classification/FastText/fastText', model='cbow', size=num_features, alpha=0.025, window=10, min_count=2,loss='ns', sample=1e-3, negative=5, iter=5, min_n=3, max_n=6, sorted_vocab=1, threads=3)
    
     empty_word = zeros(num_features,dtype=np.float32)
     
