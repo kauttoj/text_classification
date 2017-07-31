@@ -139,7 +139,9 @@ if __name__ == '__main__':
         Y_vec=Y_vec[p]    
     
     from keras.models import Sequential
-    from keras.layers import Dense, Dropout, Activation, LSTM
+    from keras.layers import Dense, Dropout, Activation, LSTM,Bidirectional
+    from keras import backend as K
+    K.set_learning_phase(1) #set learning phase
     
     batch_size=128
     def getmodel():
@@ -147,8 +149,9 @@ if __name__ == '__main__':
         #model.add(Embedding(top_words, embedding_vecor_length, input_length=max_review_length))
         #model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu'))
         #model.add(MaxPooling1D(pool_size=2))
-        rate_drop_lstm = 0.10
-        model.add(LSTM(80,dropout=rate_drop_lstm,recurrent_dropout=rate_drop_lstm,input_shape=(document_max_num_words, num_features)))            
+        rate_drop_lstm = 0.15
+#        model.add(Bidirectional(LSTM(100,dropout=rate_drop_lstm,recurrent_dropout=rate_drop_lstm),input_shape=(document_max_num_words, num_features)))
+        model.add(LSTM(100,dropout=rate_drop_lstm,recurrent_dropout=rate_drop_lstm,input_shape=(document_max_num_words, num_features)))
         # ORIGINAL:
         #model.add(LSTM(int, input_shape=(document_max_num_words, num_features)))
         #model.add(Dropout(0.3))
@@ -188,10 +191,11 @@ if __name__ == '__main__':
 #                validate_indices, test_indices = test_indices , validate_indices
     
         # Train model                      
-        model=getmodel()
+        model=getmodel()            
+        
         model.fit(X[train_index,:], Y[train_index,:],
-                  batch_size=batch_size, epochs=7, 
-                  validation_data=(X[test_index,:],Y[test_index,:]))            
+                  batch_size=batch_size, epochs=8, validation_split=0.1,shuffle=True)
+                  #validation_data=(X[test_index,:],Y[test_index,:]))            
                     
         predictions = model.predict_classes(X[test_index,:], batch_size=batch_size)
         
@@ -211,3 +215,9 @@ if __name__ == '__main__':
     print('Score: %1.4f' % np.mean(scores))
     print('Accuracy: %1.4f' % np.mean(accuracys))
     print(confusion)
+    
+    from keras.utils import plot_model
+    import pydot
+    import graphviz
+    plot_model(model, to_file='laurea_LSTM_classifier_ver1_typeA_model.png')    
+    

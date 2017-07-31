@@ -15,3 +15,4 @@ examples/deep_classification_reuters/reuters21578/
 .settings/org.eclipse.core.resources.prefs
 *.pyc
 *.csv
+*.pickle
