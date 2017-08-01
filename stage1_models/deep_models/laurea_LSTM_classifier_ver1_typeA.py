@@ -13,7 +13,6 @@
 # In[ ]:
 
 
-import re
 
 #from gensim.models.word2vec import Word2Vec
 
@@ -88,7 +87,7 @@ def worker(i):
 if __name__ == '__main__':
 
     HOME=os.getcwd()
-    os.chdir(HOME+'\\..')
+    os.chdir(HOME+os.sep+'..')
     sys.path.insert(0,os.getcwd())
     os.chdir(HOME)
     import get_my_data    

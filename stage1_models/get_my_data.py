@@ -123,8 +123,8 @@ def getdata():
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
-        (r'C:\Users\Jannek\Documents\git_repos\text_classification\data\TALOUS','TALOUS'), 
-        (r'C:\Users\Jannek\Documents\git_repos\text_classification\data\TERVEYS','TERVEYS')    
+        (r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
+        (r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')    
     ]
     
     data = DataFrame({'text': [], 'mylabel': []})
