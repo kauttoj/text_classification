@@ -16,3 +16,4 @@ examples/deep_classification_reuters/reuters21578/
 *.pyc
 *.csv
 *.pickle
+hfst/

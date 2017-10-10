@@ -96,7 +96,7 @@ if __name__ == '__main__':
     import get_my_data    
     
     print('\n--- Parsing data ---')
-    data=get_my_data.getdata()
+    data=get_my_data.preprocess_folder()
     
     random.seed(666)
     # ## General constants (modify them according to you environment) 
@@ -138,39 +138,46 @@ if __name__ == '__main__':
     from keras.models import Sequential
     from keras.layers import Dense, Dropout, Activation, LSTM,Bidirectional,Masking
     from keras.callbacks import EarlyStopping      
-    from keras import backend as K
-    K.set_learning_phase(1) #set learning phase
+    import my_keras_losses
     
-    from keras.backend.tensorflow_backend import set_session
-    config = tf.ConfigProto(
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.80),
-        device_count = {'GPU': 1}
-    )        
-    set_session(tf.Session(config=config))             
+    #K.set_learning_phase(1) #set learning phase
+    
+    #from keras.backend.tensorflow_backend import set_session
+    #config = tf.ConfigProto(
+    #    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.80),
+    #    device_count = {'GPU': 1}
+    #)        
+    #set_session(tf.Session(config=config))       
+    
 
     def getmodel():
         model = Sequential()
         #model.add(Embedding(top_words, embedding_vecor_length, input_length=max_review_length))
         #model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu'))
         #model.add(MaxPooling1D(pool_size=2))
-        rate_drop_lstm = 0.20
+        rate_drop_lstm = 0.30
 #        model.add(Bidirectional(LSTM(100,dropout=rate_drop_lstm,recurrent_dropout=rate_drop_lstm),input_shape=(document_max_num_words, num_features)))
 
         if not mask_val==0:
             model.add(Masking(mask_val, name="input_layer", input_shape=(document_max_num_words, num_features)))
-        model.add(LSTM(100,name="lstm_layer",dropout=rate_drop_lstm,recurrent_dropout=rate_drop_lstm,input_shape=(document_max_num_words, num_features)))
+        
+        model.add(LSTM(120,name="lstm_layer",dropout=rate_drop_lstm,recurrent_dropout=rate_drop_lstm,input_shape=(document_max_num_words, num_features)))
         # ORIGINAL:
         #model.add(LSTM(int, input_shape=(document_max_num_words, num_features)))
         #model.add(Dropout(0.3))
         model.add(Dense(num_categories,name='output_layer'))
-        model.add(Activation('sigmoid')) # sigmoid
+        model.add(Activation('sigmoid')) # sigmoid        
         
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])    
+        
+        #from keras import backend as K
+        #def binary_crossentropy(y_true, y_pred):
+        #    return K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)          
+        model.compile(loss=my_keras_losses.weighted_binary_crossentropy, optimizer='adam', metrics=['accuracy'])    
         return model
     
     from sklearn.model_selection import StratifiedKFold
     
-    k_fold10 = StratifiedKFold(n_splits=10,shuffle=True,random_state=666)
+    k_fold10 = StratifiedKFold(n_splits=5,shuffle=True,random_state=666)
 #    k_fold2 = StratifiedKFold(n_splits=2,shuffle=True,random_state=666)
 #    indices=[];
 #    for train_index, test_index in k_fold5.split(X,Y_vec):
@@ -187,7 +194,7 @@ if __name__ == '__main__':
     k=0        
     history=[]
     early_stopping = EarlyStopping(monitor='val_loss', patience=3) 
-    batch_size=100
+    batch_size=200
     
     print('\n---- Starting first loops ----')
     #for train_indices, validate_indices, test_indices in indices:

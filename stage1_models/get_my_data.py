@@ -3,64 +3,85 @@
 Created on Thu Jun 22 09:52:01 2017
 
 @author: Jannek
+
+Text preprocessing steps:    
+    1. remove punctuations (keep sentences and line changes)
+    2. remove stop words (frequent and non-informative words)
+    3. lemmatizer (reduce each word into its basic form) - This is a highly non-trivial problem, particularly for Finnish!
+
 """
 from pandas import DataFrame
 import os
 import numpy
 import re
 import nltk
-from nltk.tokenize import WhitespaceTokenizer
 import string
-#from nltk.corpus import wordnet as wn
-#from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer
-#from nltk.stem import WordNetLemmatizer
-import string
+import fin_lemmatizer
 
-translate_table = dict((ord(char), ' ') for char in string.punctuation)   
-
-#wordnet_lemmatizer = WordNetLemmatizer('finnish')
-snowball_stemmer = SnowballStemmer('finnish')
-stopword_list = nltk.corpus.stopwords.words('finnish')
-
-def tokenize_text(text,skip=0):    
-    if skip==0:
-        text = text.lower()
-        #remove the punctuation using the character deletion step of translate
-        #text = text.translate(translate_table)        
-    #tokens = text.split(' ')
-    tokens = WhitespaceTokenizer().tokenize(text) 
-    tokens = [token.strip() for token in tokens]
-    return tokens       
-
-def remove_special_characters(text):
-    tokens = tokenize_text(text)
-    punc = string.punctuation
-    #punc=punc.replace('.','')
-    #punc=punc.replace('?','')
-    #punc=punc.replace('!','')
-    pattern = re.compile('[{}]'.format(re.escape(punc)))
-    filtered_tokens = filter(None, [pattern.sub('', token) for token in tokens])
-    filtered_text = ' '.join(filtered_tokens)
-    return filtered_text
+# all files in class-labelled folders
+def preprocess_folder():
+    
+    """
+    DATA
+    """
+    SOURCES=[
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/football','FOOTBALL'),
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/rugby','RUGBY')                    
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
+        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
+        #(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
+        #(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')    
+		(r'D:/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
+		(r'D:/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')  
+    ]
+    
+    data = DataFrame({'text': [], 'mylabel': []})
+    for path, classification in SOURCES:
+        data = data.append(build_data_frame(path, classification))
         
-def remove_stopwords(text):
-    tokens = tokenize_text(text)
-    filtered_tokens = [token for token in tokens if token not in stopword_list]
-    filtered_text = ' '.join(filtered_tokens)    
-    return filtered_text   
-
-def stemmer(text):
+    data = normalize_corpus(data)
     
-    text=tokenize_text(text,skip=1)        
-    text=[snowball_stemmer.stem(a) for a in text]
-    return ' '.join(text)
-
-def lemmer(text):
+    data = data.reindex(numpy.random.permutation(data.index))
     
-    text=tokenize_text(text,skip=1)        
-    text=[wordnet_lemmatizer.stem(a) for a in text]
-    return ' '.join(text)
+    labels = data.mylabel.unique()
+    counts=[-1]*len(labels)
+    for i in range(len(counts)):
+        counts[i]=len(data[data.mylabel==labels[i]])
+        
+    M=min(counts)
+    for i in range(len(counts)):
+        ind=data[data.mylabel==labels[i]].index
+        data=data.drop(ind[M:])
+    
+    print('\n-- Total',len(counts),'labels with',M,'samples each')
+    
+    #data = shuffle(data)
+    
+    return data
+
+# file with given label
+def preprocess_file(file,label):
+    data = DataFrame({'text': [], 'mylabel': []})
+
+    data = data.append(build_data_frame(file,label))
+        
+    data = normalize_corpus(data)
+    
+    data = data.reindex(numpy.random.permutation(data.index)) # randomize
+    
+    labels = data.mylabel.unique()
+    counts=[-1]*len(labels)
+    for i in range(len(counts)):
+        counts[i]=len(data[data.mylabel==labels[i]])
+        
+    M=min(counts)
+    for i in range(len(counts)):
+        ind=data[data.mylabel==labels[i]].index
+        data=data.drop(ind[M:])
+    
+    print('\n-- Total',len(counts),'labels with',M,'samples each')
+        
 
 def normalize_corpus(corpus):
     
@@ -113,51 +134,39 @@ def shuffle(df, n=1, axis=0):
         df.apply(numpy.random.shuffle, axis=axis)
     return df
 
-def getdata():
-    """
-    DATA
-    """
-    SOURCES=[
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/football','FOOTBALL'),
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbs_sport/rugby','RUGBY')                    
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
-        #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
-        #(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
-        #(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')    
-		(r'D:/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
-		(r'D:/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')  
-    ]
+  
+def tokenize_text(text,skip=0):    
+    translate_table = dict((ord(char), ' ') for char in string.punctuation) 
     
-    data = DataFrame({'text': [], 'mylabel': []})
-    for path, classification in SOURCES:
-        data = data.append(build_data_frame(path, classification))
+    if skip==0:
+        text = text.lower()
+        #remove the punctuation using the character deletion step of translate
+        #text = text.translate(translate_table)        
+    #tokens = text.split(' ')
+    tokens = text.split(' ')
+    tokens = [token.strip() for token in tokens]    
+    return tokens       
+
+def remove_special_characters(text):
+    tokens = tokenize_text(text)
+    punc = string.punctuation
+    #punc=punc.replace('.','')
+    #punc=punc.replace('?','')
+    #punc=punc.replace('!','')
+    pattern = re.compile('[{}]'.format(re.escape(punc)))
+    filtered_tokens = filter(None, [pattern.sub('', token) for token in tokens])
+    filtered_text = ' '.join(filtered_tokens)
+    return filtered_text
         
-    data = normalize_corpus(data)
+def remove_stopwords(text):
+    stopword_list = nltk.corpus.stopwords.words('finnish')
     
-    data = data.reindex(numpy.random.permutation(data.index))
-    
-    labels = data.mylabel.unique()
-    counts=[-1]*len(labels)
-    for i in range(len(counts)):
-        counts[i]=len(data[data.mylabel==labels[i]])
-        
-    M=min(counts)
-    for i in range(len(counts)):
-        ind=data[data.mylabel==labels[i]].index
-        data=data.drop(ind[M:])
-    
-    print('\n-- Total',len(counts),'labels with',M,'samples each')
-    
-    #data = shuffle(data)
-    
-    return data
+    tokens = tokenize_text(text)
+    filtered_tokens = [token for token in tokens if token not in stopword_list]
+    filtered_text = ' '.join(filtered_tokens)    
+    return filtered_text   
 
+def lemmer(text):   
+    return fin_lemmatizer.lemmatize(text)
 
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Aug 26 20:45:10 2016
-
-@author: DIP
-"""
 

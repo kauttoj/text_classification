@@ -56,15 +56,15 @@ random.seed(1000)
 #    'ex_': ('Exchanges', 'all-exchanges-strings.lc.txt')
 #}
 SOURCES=[
-    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','business'),
-    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/entertainment','entertainment'),
-    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','politics'),
-    ('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/sport','sport')
+    (u'D:\JanneK\Documents\git_repos\text_classification\data\bbc\business','business'),
+    (u'D:\JanneK\Documents\git_repos\text_classification\data\bbc\entertainment','entertainment'),
+    (u'D:\JanneK\Documents\git_repos\text_classification\data\bbc\politics','politics'),
+    (u'D:\JanneK\Documents\git_repos\text_classification/data\bbc\sport','sport')
 ]
 # Word2Vec number of features
 num_features = 200
 # Limit each newsline to a fixed number of words
-document_max_num_words = 150
+document_max_num_words = 400
 # Selected categories
 
 def read_files(path):
@@ -100,9 +100,7 @@ def build_data_frame(path, classification):
     data_frame = DataFrame(rows, index=index)
     return data_frame
 
-data = DataFrame({'text': [], 'mylabel': []})
-for path, classification in SOURCES:
-    data = data.append(build_data_frame(path, classification))
+
 
 # In[ ]:
 
@@ -130,8 +128,6 @@ lemmatizer = WordNetLemmatizer()
 
 # ## Vectorize each document
 
-number_of_documents = data.shape[0]
-num_categories = len(SOURCES)
 
 filename = "savedXY.p"
 
@@ -145,7 +141,14 @@ def tokenize(document):
 
     return words
 
-if 1: #os.path.isfile(filename): 
+if 0: #os.path.isfile(filename): 
+    
+    number_of_documents = data.shape[0]
+    num_categories = len(SOURCES)
+
+    data = DataFrame({'text': [], 'mylabel': []})
+    for path, classification in SOURCES:
+        data = data.append(build_data_frame(path, classification))
 
     X = np.zeros((number_of_documents, document_max_num_words, num_features),dtype=np.float32)
     Y = np.zeros(shape=(number_of_documents, num_categories),dtype=np.float32)
@@ -218,12 +221,15 @@ else:
 
     with open(filename, "rb") as f:
         X,Y = pickle.load(f)
+        
+    number_of_documents = X.shape[0]
+    num_categories = len(SOURCES)        
 
 # ## Split training and test sets
 
 # In[ ]:
 
-X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3)
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.4)
 
 
 # ## Create Keras model
@@ -232,7 +238,7 @@ X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3)
 
 model = Sequential()
 
-model.add(LSTM(int(document_max_num_words*1.5), input_shape=(document_max_num_words, num_features)))
+model.add(LSTM(30, input_shape=(document_max_num_words, num_features)))
 model.add(Dropout(0.3))
 model.add(Dense(num_categories))
 model.add(Activation('sigmoid'))
@@ -247,10 +253,10 @@ model.compile(optimizer='adam',#SGD(lr=0.01, momentum=0.0, decay=0.0, nesterov=F
 # In[ ]:
 
 # Train model
-model.fit(X_train, Y_train, batch_size=70, epochs=10, validation_data=(X_test, Y_test),shuffle=True)
+model.fit(X_train, Y_train, batch_size=30, epochs=10, validation_data=(X_test, Y_test),shuffle=True)
 
 # Evaluate model
-score, acc = model.evaluate(X_test, Y_test, batch_size=70)
+score, acc = model.evaluate(X_test, Y_test, batch_size=50)
     
 print('Score: %1.4f' % score)
 print('Accuracy: %1.4f' % acc)
