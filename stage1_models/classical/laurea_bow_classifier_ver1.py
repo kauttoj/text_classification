@@ -40,10 +40,11 @@ from itertools import tee, islice
 import os
 import sys
 HOME=os.getcwd()
-os.chdir(HOME+'\\..')
+os.chdir(HOME+'/..')
 sys.path.insert(0,os.getcwd())
 os.chdir(HOME)
-import get_my_data
+import get_my_data_ver1
+import get_my_data_pikkudata
 
 def median(arr,ind):                
     try:
@@ -85,7 +86,9 @@ def get_metrics(true_labels, predicted_labels):
 #if __name__ == '__main__':
     
 print('\n--- Parsing data ---')
-data=get_my_data.getdata()
+#data=get_my_data_ver1.getdata()
+
+data=get_my_data_pikkudata.getdata()
     
 #    """
 #    MODEL
@@ -134,20 +137,22 @@ def custom_analyzer(doc):
             # for ngram in zip(*[terms[i:] for i in range(3)]): <-- solution without a generator (works the same but has higher memory usage)
             for ngram in zip(*[islice(seq, i, len(terms)) for i, seq in enumerate(tee(terms, ngramLength))]): # <-- solution using a generator
                 ngram = ' '.join(ngram)
+                ngram = ngram.strip()
                 yield ngram
 
-vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,3))    
-#vect = CountVectorizer(analyzer=custom_analyzer,max_df=0.85,min_df=0,max_features = 30000,ngram_range=(1,3))    
+#vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))    
 
 # test if it works
-vect.fit_transform(data.iloc[0:5]['text'].values)
+#vect.fit_transform(data.iloc[0:5]['text'].values)
 
-tfidf = TfidfTransformer();
+#vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))   
+
+
 #model = LogisticRegression()
 #model = svm.SVC(kernel = 'linear',C = 0.001)
 model = SGDClassifier(penalty='l2',loss='log',n_iter=150)
 #model = RandomForestClassifier(n_estimators=30)
-decomposer = TruncatedSVD(200,n_iter=8)
+decomposer = TruncatedSVD(100,n_iter=15)
 #decomposer = LatentDirichletAllocation(n_topics=10, max_iter=10,learning_method='online',learning_offset=50.,random_state=1)
 #decomposer = NMF(n_components=50, random_state=1,alpha=.1, l1_ratio=.5)
    
@@ -166,7 +171,7 @@ for a in numpy.unique(y):
 """
 START LOOP
 """
-k_fold = StratifiedKFold(n_splits=10,shuffle=True, random_state=666)
+k_fold = StratifiedKFold(n_splits=15,shuffle=True, random_state=666)
     
 accuracys=[]
 precisions=[]
@@ -191,6 +196,9 @@ for train_indices, test_indices in k_fold.split(data,data['mylabel']):
     test_y = data.iloc[test_indices]['mylabel'].values.astype(str)        
     
     t0 = time()
+    
+    vect = CountVectorizer(analyzer=custom_analyzer,max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))    
+    tfidf = TfidfTransformer();    
     
     dat = vect.fit_transform(train_text)
     dat = tfidf.fit_transform(dat)

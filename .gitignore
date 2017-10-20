@@ -17,3 +17,5 @@ examples/deep_classification_reuters/reuters21578/
 *.csv
 *.pickle
 hfst/
+Project.tar.gz
+Project.7z

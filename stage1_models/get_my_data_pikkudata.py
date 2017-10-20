@@ -81,18 +81,19 @@ def read_files(path):
         for file_name in file_names:
             file_path = os.path.join(root, file_name)
             if os.path.isfile(file_path):
-                past_header, lines = False, []
-                f = open(file_path, encoding='utf-8')
-                for line in f:
-                    if past_header and len(line)>0 and line is not '\n':
-                        line=line.rstrip()
-                        lines.append(line)
-                    else:
-                        past_header = True                        
-                f.close()
-                content = ' '.join(lines)
-                if len(content.split())>50:
-                    yield file_path, content
+                past_header, lines = True, []
+                if file_path.find('target.txt')==-1:
+                    f = open(file_path, encoding='utf-8')
+                    for line in f:
+                        if past_header and len(line)>0 and line is not '\n':
+                            line=line.rstrip()
+                            lines.append(line)
+                        else:
+                            past_header = True                        
+                    f.close()
+                    content = ' '.join(lines)
+                    if len(content.split())>50:
+                        yield file_path, content
 
 
 def build_data_frame(path, classification):
@@ -124,8 +125,9 @@ def getdata():
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/business','BUSINESS'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/politics','POLITICS'),
         #('C:/Users/Jannek/Documents/git_repos/text_classification/data/bbc/tech','TECH')        
-        (r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
-        (r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')    
+        #(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TALOUS','1'), 
+        #(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/TERVEYS','2'), 
+        (r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata','null'),
 		#(r'D:/JanneK/Documents/git_repos/text_classification/data/TALOUS','TALOUS'), 
 		#(r'D:/JanneK/Documents/git_repos/text_classification/data/TERVEYS','TERVEYS')  
     ]
@@ -133,8 +135,14 @@ def getdata():
     data = DataFrame({'text': [], 'mylabel': []})
     for path, classification in SOURCES:
         data = data.append(build_data_frame(path, classification))
-                
-    data = data.reindex(numpy.random.permutation(data.index))
+    
+    with open(r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata/target.txt','r',encoding='utf-8') as f:
+        target = f.read()
+            
+    y = target.split()    
+    data['mylabel'] = y
+        
+    #data = data.reindex(numpy.random.permutation(data.index))
     
     labels = data.mylabel.unique()
     counts=[-1]*len(labels)
@@ -147,16 +155,13 @@ def getdata():
         data=data.drop(ind[M:])
 
 #    import io
-#    outpath = u'D:/JanneK/Documents/git_repos/text_classification/data/pikkudata/'
+#    outpath = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata/'
 #    Y = []
 #    for i in range(0,len(data)):     
 #        fname = 'text%0.3d.txt' % (i+1)
 #        with io.open(outpath + fname, 'w',encoding='utf-8') as outfile:
 #            outfile.write(data.values[i,1])
-#            if data.values[i,0] is 'TALOUS':
-#                Y.append(1)
-#            else:
-#                Y.append(2)
+#            Y.append(data.values[i,0])
 #
 #    with io.open(outpath + 'target.txt', 'w',encoding='utf-8') as outfile:
 #        for y in Y:
