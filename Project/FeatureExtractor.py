@@ -1,6 +1,81 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from itertools import tee, islice
+import os.path
+from gensim.models.wrappers import FastText
+from functools import partial
+
+def processInput(document, model, Params,num_features):
+    words = []
+
+    for terms in construct_sentence(document, Params):
+        if Params['RemoveStops'] == 1:
+            terms = [x for x in terms if x not in Params['stopword_list']]
+        words = words + terms
+
+    document_max_num_words = len(words)
+    # Y[idx,yvals[document[0]]] = 1
+    # print('...processing document',idx)
+    oldwords = {}
+    mat = np.zeros((document_max_num_words, num_features), dtype=np.float32)
+    k = 0
+    for jdx, word in enumerate(words):
+
+        ind = document_max_num_words - jdx + k - 1
+        if jdx == document_max_num_words:
+            break
+        else:
+            success = False
+            if 0:#word in oldwords:
+                if oldwords != None:
+                    mat[ind, :] = oldwords[word]
+                    success = True
+            else:
+                if word in model:
+                    mat[ind, :] = model[word]
+                    # oldwords[word]=X[idx,ind,:]
+                    success = True
+                    # else:
+                    # oldwords[word]=None
+            if not success:
+                k += 1
+    return mat
+
+
+def convert_to_embedded(Params,data):
+    # filename = "laurea_LSTM_classifier_ver1_typeA.p"
+    # binfile = r'C:/Users/Jannek/Documents/git_repos/text_classification/data/wiki.fi'
+
+    # Load Skipgram or CBOW model
+    print('Loading Fasttext model (this takes couple of minutes)')
+    model = FastText.load_fasttext_format(Params['FastTextBin'])
+    # model={'testi1':np.zeros((300)),'testi2':np.zeros((300))}
+
+    num_features = model.vector_size
+    number_of_documents = len(data)
+
+       # p = mp.Pool(initializer=init, initargs=(a,anim))
+
+    print('Starting text vectorization')
+
+    func = partial(processInput, model=model,Params = Params,num_features=num_features)
+
+    X = []
+    if 0:
+        import multiprocessing
+        pool = multiprocessing.Pool(2)
+        results = pool.map_async(func, data.values)
+        for i, mat in enumerate(results):
+            X.append(mat)
+    else:
+        for i, doc in enumerate(data):
+            print('..processing document', i + 1)
+            X.append(func(doc))
+
+    print('Done! Text vectorized')
+
+    return X
+
 
 def count_numbers(data):
     c=0
@@ -86,7 +161,7 @@ def main(data_in,Params):
     feat = {}        
         
     if Params['WordEmbedding'] == 1:
-        pass                
+        X, Y, Y_vec = convert_to_embedded(Params,data_in)
     else:        
         from sklearn.feature_extraction.text import CountVectorizer
 #        vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))    
@@ -98,8 +173,7 @@ def main(data_in,Params):
         feat['X_labels'] = obj.get_feature_names()  
         feat['X_transformer'] = obj
         
-    print('Total %i main features created' % (len(feat['X_labels'])))        
-    
+    print('Total %i main features created' % (len(feat['X_labels'])))
     
     Y= np.zeros((X.shape[0],1))
     for i,data in enumerate(data_in):

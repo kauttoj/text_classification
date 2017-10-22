@@ -28,19 +28,18 @@ if __name__ == "__main__":
     
     # how to preprocess text before classification
     # Note: this only takes effect after analyzing raw text
-    Params['CUSTOMTagging'] = 1
-    Params['Lemmatize'] = 1
-    Params['RemoveStops'] = 0
-    Params['POSTagging'] = 1
-    Params['RemovePunctuation'] = 1
+    Params['CUSTOMTagging'] = 1 # use tagged words instead of original ones
+    Params['Lemmatize'] = 1 # use lemmatized words
+    Params['RemoveStops'] = 0 # remove all stop words from analysis
+    Params['RemovePunctuation'] = 1 # remove punctuation (still keep sentences)
     
-    Params['UseCustomFeatures'] = 1
-    Params['TF-IDFScaling'] = 1
-    Params['n-gram'] = 2
+    Params['UseCustomFeatures'] = 1 # include custom features in the model
+    Params['TF-IDFScaling'] = 1 # do TF-IDF scaling
+    Params['n-gram'] = 2 # n-gram level
     Params['WordSmoothing'] = 1
     
-    Params['WordEmbedding'] = 0 # 0 = use BOW
-    Params['Compression'] = 0
+    Params['WordEmbedding'] = 1 # 0 = use BOW
+    Params['Compression'] = 0 # apply SVD or NMF to data
     
     # main test/train split degree
     Params['CV-folds'] = 20
@@ -69,7 +68,9 @@ if __name__ == "__main__":
     
     Params['INPUT-folder'] = r'D:/JanneK/Documents/git_repos/text_classification/data/pikkudata'
     Params['OUTPUT-folder'] = r'D:/JanneK/Documents/git_repos/text_classification/Project/results'
-    
+
+    Params['FastTextBin'] = r'D:/JanneK/Documents/git_repos/text_classification/data/wiki.fi'
+
     #Params['INPUT-folder'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata'
     #Params['OUTPUT-folder'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/Project/results'
     

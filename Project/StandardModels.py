@@ -296,9 +296,6 @@ def main(FEAT=None,Params=None):
         
         t0 = time()                
         
-        #PREPARATOR.fit(XX)
-        #XX = PREPARATOR.transform(XX)
-        #MODEL.fit(X=XX,y=YY)
         grid_search = GridSearchCV(PIPE, parameters, n_jobs=2, verbose=1,cv=10)
         
         grid_search.fit(X=XX,y=YY)
@@ -309,29 +306,11 @@ def main(FEAT=None,Params=None):
         
         print('.....training done in %0.3fs' % (time() - t0))
                 
-#        dat = tfidf.transform(test_X)
-#             
-#        if decomposer is not None:
-#            dat = decomposer.transform(dat)
-#
-#        if Params['UseCustomFeatures'] == 1: 
-#            #test_X_add = scaler.transform(test_X_add)
-#            if decomposer is None:  
-#                #dat = scipy.sparse.hstack([dat,test_X_add,test_y])                
-#                dat = scipy.sparse.hstack([dat,test_X_add])  
-#            else:
-#                #dat = np.concatenate((dat,test_X_add,test_y),axis=1)
-#                dat = np.concatenate((dat,test_X_add),axis=1)
-            
         XX = X[test_indices,:]
         YY = Y[test_indices]                
         
         #XX = PREPARATOR.transform(XX)
         predictions = grid_search.predict(X=XX)
-        
-        #print("\nTopics in decomposed model:")
-        #tfidf_feature_names = tfidf.get_feature_names()
-        #print_top_words(decomposer, tfidf_feature_names,10)
 
         incorrect_samples.append([x[0] for x in zip(test_indices,predictions,YY) if x[1]!=x[2]])
 
