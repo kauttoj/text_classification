@@ -8,5 +8,6 @@ Created on Sun Jul 30 14:50:03 2017
 import parallel_test
 
 if __name__ == '__main__':
+    print('testing')
     result = parallel_test.myfun()
     

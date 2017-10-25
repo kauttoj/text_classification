@@ -11,7 +11,7 @@ import pickle
 import os
 
 if __name__ == "__main__":        
-    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    #__spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     
     SKIP_PRESTORED = 0
     
@@ -33,16 +33,17 @@ if __name__ == "__main__":
     Params['RemoveStops'] = 0 # remove all stop words from analysis
     Params['RemovePunctuation'] = 1 # remove punctuation (still keep sentences)
     
-    Params['UseCustomFeatures'] = 1 # include custom features in the model
-    Params['TF-IDFScaling'] = 1 # do TF-IDF scaling
+    Params['UseCustomFeatures'] = 0 # include custom features in the model
+    #Params['TF-IDFScaling'] = 1 # do TF-IDF scaling
     Params['n-gram'] = 2 # n-gram level
-    Params['WordSmoothing'] = 1
+    #Params['WordSmoothing'] = 1
+    Params['Compression'] = 0  # apply SVD to word matrix before
     
-    Params['WordEmbedding'] = 1 # 0 = use BOW
-    Params['Compression'] = 0 # apply SVD or NMF to data
+    Params['WordEmbedding'] = 1 # 0 = use discrete BOW, 1 = use FastText with tf-idf
+    Params['WordEmbedding_PCA'] = 1  # apply PCA to word embeddings before pooling
     
     # main test/train split degree
-    Params['CV-folds'] = 20
+    Params['CV-folds'] = 15
     
     # How to treat target vector
     #Params['TargetType'] = 'regression'
@@ -53,8 +54,9 @@ if __name__ == "__main__":
     #Params['Algorithm'] = 'SVM'
     #Params['Algorithm'] = 'NaiveBayes'
     #Params['Algorithm'] = 'RandomForest'
-    Params['Algorithm'] = 'Logistic'
-    #Params['Algorithm'] = 'SGD'
+    #Params['Algorithm'] = 'Logistic'
+    Params['Algorithm'] = 'SGD'
+    #Params['Algorithm'] = 'Neighbors'
     #Params['Algorithm'] = 'ExtraTrees'
     #Params['Algorithm'] = 'Ensemble'
     

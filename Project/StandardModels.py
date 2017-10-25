@@ -18,7 +18,7 @@ from nltk import tokenize
 # the mock-0.3.1 dir contains testcase.py, testutils.py & mock.py
 
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import TfidfTransformer,TfidfVectorizer
 
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
@@ -29,7 +29,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn import metrics
 
-from sklearn.decomposition import TruncatedSVD, NMF
+from sklearn.decomposition import TruncatedSVD, PCA
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedKFold
@@ -39,6 +39,10 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from itertools import tee, islice
 
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from collections import defaultdict
+
+from sklearn.neighbors import KNeighborsClassifier
 
 import scipy
 #from vowpalwabbit import pyvw
@@ -193,7 +197,7 @@ class prepare_data(BaseEstimator, TransformerMixin):
         #self.decomposer = NMF(n_components=n_components)
         self.tfidf = TfidfTransformer()
             
-    def fit(self,X, y=None):                    
+    def fit(self,X, y=None):
         dat = self.tfidf.fit_transform(X[:,0:-self.Params['n_custom_features']])   
         if self.Params['Compression']==1:
             self.decomposer.fit(dat)
@@ -211,7 +215,123 @@ class prepare_data(BaseEstimator, TransformerMixin):
     # def fit_transform(self,X, y=None):
     #     self.fit(X,y)
     #     return self.transform(X)
-   
+
+
+class prepare_data_embedded(BaseEstimator, TransformerMixin):
+    def __init__(self, Params=None, Feat = None):
+        self.Params = Params
+        self.pipe = None
+        self.n_components = None
+        self.inds = None
+        self.Feat = Feat
+
+    def fit(self, X, y=None):
+        self.inds = np.where(np.sum(X[:,0:-self.Params['n_custom_features']],axis=0)>0)[0]
+        X = self.Feat['X_transformer'][self.inds, :]
+        self.inds = self.inds.tolist()
+        self.n_components = X.shape[1]-5
+        self.pipe = Pipeline([('scaler', StandardScaler()), ('pca',PCA(n_components=self.n_components))])
+        self.pipe.fit(X)
+        return self
+
+    def transform(self, X):
+        XX = np.zeros((X.shape[0],self.n_components),dtype=np.float32)
+        for row in range(XX.shape[0]):
+            ind = X[row,0:-self.Params['n_custom_features']].nonzero()[0]
+            x = 0
+            k = 0
+            for elem in ind:
+                if elem in self.inds:
+                    xx = self.Feat['X_transformer'][elem,:].reshape(1, -1)
+                    x += xx*X[row,elem]
+                    k += X[row,elem]
+
+            x /= k
+            x = self.pipe.transform(x)
+
+            XX[row,0:self.n_components] = x
+        XX = np.concatenate((XX, X[:, -self.Params['n_custom_features']:]), axis=1)
+        return XX
+
+
+class IdentityTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        pass
+
+    def fit(self, input_array, y=None):
+        return self
+
+    def transform(self, input_array, y=None):
+        return input_array * 1
+
+
+class MeanEmbeddingVectorizer(object):
+    def __init__(self, word2vec):
+        self.word2vec = word2vec
+        self.dim = len(word2vec.itervalues().next())
+
+    def fit(self, X, y):
+        return self
+
+    def transform(self, X):
+        return np.array([
+            np.mean([self.word2vec[w] for w in words if w in self.word2vec]
+                    or [np.zeros(self.dim)], axis=0)
+            for words in X
+        ])
+
+# and a tf-idf version of the same
+
+class TfidfEmbeddingVectorizer(BaseEstimator, TransformerMixin):
+
+    def __init__(self, Params=None, Feat = None):
+        self.Params = Params
+        self.word2weight = None
+        self.Feat = Feat
+        self.wordlist = None
+        self.pca = None
+
+    def fit(self, X, y):
+        self.dim = self.Params['embedding_dimension']
+        tfidf = TfidfVectorizer(analyzer = lambda x: x)  # skip all word processing
+        tfidf.fit(X)
+        # if a word was never seen - it must be at least as infrequent
+        # as any of the known words - so the default idf is the max of
+        # known idf's
+        max_idf = max(tfidf.idf_)
+        self.word2weight = defaultdict(lambda : max_idf,[(w, tfidf.idf_[i]) for w, i in tfidf.vocabulary_.items()])
+
+        wordlist = []
+        for words in X:
+            for w in words:
+                if w not in wordlist and self.Feat['word2vec'][w] is not None:
+                    wordlist.append(w)
+        self.wordlist = wordlist
+
+        if self.Params['WordEmbedding_PCA']==1:
+            #self.scaler = StandardScaler()
+            self.pca = PCA(n_components = self.dim)
+            X = [self.Feat['word2vec'][x].reshape(1, -1) for x in wordlist]
+            X = np.concatenate(X,axis=0)
+            #X = self.fit_transform(X)
+            self.pca.fit(X)
+        return self
+
+    def transform(self, X):
+        res = np.zeros((len(X),self.dim),dtype=np.float32)
+        for i,words in enumerate(X):
+            x = 0
+            k = 0.0        
+            for w in words:
+                if w in self.wordlist:
+                    x+=self.Feat['word2vec'][w]*self.word2weight[w]
+                    k+=1.0
+            if self.Params['WordEmbedding_PCA'] == 1:
+                res[i,:] = self.pca.transform(x.reshape(1, -1) / k)
+            else:
+                res[i,:] = x/k
+        return res
+
 def main(FEAT=None,Params=None):
                    
     if Params['TargetType'] == 'regression':
@@ -227,12 +347,15 @@ def main(FEAT=None,Params=None):
         if Params['Algorithm'] == 'RandomForest':
              model = RandomForestClassifier(n_estimators=100)
              parameters = {'MODEL__n_estimators':[50,100,150]}
+        if Params['Algorithm'] == 'Neighbors':
+            model = KNeighborsClassifier(n_neighbors=5,weights="uniform",algorithm ='auto', leaf_size = 30, p = 2, metric ='minkowski')
+            parameters = {'MODEL__n_neighbors':[3,5],'MODEL__leaf_size':[15,30,50]}
         if Params['Algorithm'] == 'SGD':
             model = SGDClassifier(loss='log',penalty='l2')
-            parameters = {'MODEL__penalty':['l2'],'MODEL__alpha':[0.00005,0.00015],'MODEL__n_iter':[10]}
+            parameters = {'MODEL__penalty':['l1','l2'],'MODEL__alpha':[0.00005,0.0001],'MODEL__n_iter':[10]}
         if Params['Algorithm'] == 'Logistic':
             model = LogisticRegression()
-            parameters = {'MODEL__penalty': ['l2'],'MODEL__C':[0.5,0.7]}
+            parameters = {'MODEL__penalty': ['l2'],'MODEL__C':[0.3,0.5,0.7]}
         if Params['Algorithm'] == 'ExtraTrees':   
             model = ExtraTreesClassifier(n_estimators=100)   
             parameters = {'MODEL__n_estimators':[50,100,150]}
@@ -274,14 +397,20 @@ def main(FEAT=None,Params=None):
     #Y = [y for y in FEAT['Y'][:,0].tolist()]
     X = FEAT['X']
     Params['n_custom_features']=0
-    if Params['UseCustomFeatures']==1:                           
-        X = scipy.sparse.hstack([X,FEAT['X_custom']])
+    if Params['UseCustomFeatures']==1:
+        try:
+            X = scipy.sparse.hstack([X,FEAT['X_custom']])
+            X = X.tocsr()
+        except:
+            X = np.hstack((X, FEAT['X_custom']))
         Params['n_custom_features'] = FEAT['X_custom'].shape[1]
-                
-    X = X.tocsr()
+
     Y = FEAT['Y'].ravel()
-    
-    PIPE = Pipeline([("PREPARATOR",prepare_data(Params)),("MODEL", model)])
+
+    if Params['WordEmbedding'] == 1:
+        PIPE = Pipeline([("PREPARATOR", TfidfEmbeddingVectorizer(Params,FEAT)),("MODEL", model)])
+    else:
+        PIPE = Pipeline([("PREPARATOR", prepare_data(Params)),("MODEL", model)])
 
     incorrect_samples = []
     best_parameters=[]
@@ -289,28 +418,34 @@ def main(FEAT=None,Params=None):
     print('\n---- Starting first loops ----')
     for train_indices, test_indices in k_fold.split(Y,Y):
         k+=1
-        print('...fold',k)                                             
-        
-        XX = X[train_indices,:]
+        print('...fold',k)
+
+        if Params['WordEmbedding'] == 1:
+            XX = [X[i] for i in train_indices]
+        else:
+            XX = X[train_indices,:]
         YY = Y[train_indices]
         
         t0 = time()                
         
-        grid_search = GridSearchCV(PIPE, parameters, n_jobs=2, verbose=1,cv=10)
-        
+        grid_search = GridSearchCV(PIPE, parameters, n_jobs=3, verbose=1,cv=10)        
         grid_search.fit(X=XX,y=YY)
-        
-        best_parameters.append(grid_search.best_estimator_.get_params())
+        best_parameters.append(grid_search.best_estimator_.get_params())        
+        #PIPE.fit(X=XX,y=YY)
         
         #best_params = MODEL.best_params_
         
         print('.....training done in %0.3fs' % (time() - t0))
-                
-        XX = X[test_indices,:]
+
+        if Params['WordEmbedding'] == 1:
+            XX = [X[i] for i in test_indices]
+        else:
+            XX = X[test_indices,:]
         YY = Y[test_indices]                
         
         #XX = PREPARATOR.transform(XX)
         predictions = grid_search.predict(X=XX)
+        #predictions = PIPE.predict(X=XX)
 
         incorrect_samples.append([x[0] for x in zip(test_indices,predictions,YY) if x[1]!=x[2]])
 

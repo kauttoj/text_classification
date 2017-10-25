@@ -4,42 +4,36 @@ from itertools import tee, islice
 import os.path
 from gensim.models.wrappers import FastText
 from functools import partial
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.base import BaseEstimator, TransformerMixin
+import pickle
 
-def processInput(document, model, Params,num_features):
+def processInput(document,model,Params,word_matrix):
+
     words = []
-
     for terms in construct_sentence(document, Params):
         if Params['RemoveStops'] == 1:
             terms = [x for x in terms if x not in Params['stopword_list']]
         words = words + terms
 
-    document_max_num_words = len(words)
+    #document_max_num_words = len(words)
     # Y[idx,yvals[document[0]]] = 1
     # print('...processing document',idx)
-    oldwords = {}
-    mat = np.zeros((document_max_num_words, num_features), dtype=np.float32)
-    k = 0
-    for jdx, word in enumerate(words):
-
-        ind = document_max_num_words - jdx + k - 1
-        if jdx == document_max_num_words:
-            break
+    #mat = np.zeros((document_max_num_words, num_features), dtype=np.float32)
+    ind = []
+    for word in words:
+        if word in word_matrix['word']:
+            ind.append(word_matrix['word'].index(word))
+        elif word in model:
+            word_matrix['word'].append(word)
+            a=np.array(model[word],dtype=np.float32)
+            word_matrix['vector']=np.vstack((word_matrix['vector'],a)) if word_matrix['vector'].size else a
         else:
-            success = False
-            if 0:#word in oldwords:
-                if oldwords != None:
-                    mat[ind, :] = oldwords[word]
-                    success = True
-            else:
-                if word in model:
-                    mat[ind, :] = model[word]
-                    # oldwords[word]=X[idx,ind,:]
-                    success = True
-                    # else:
-                    # oldwords[word]=None
-            if not success:
-                k += 1
-    return mat
+            ind.append(-1)
+
+    return ind,word_matrix
 
 
 def convert_to_embedded(Params,data):
@@ -50,32 +44,49 @@ def convert_to_embedded(Params,data):
     print('Loading Fasttext model (this takes couple of minutes)')
     model = FastText.load_fasttext_format(Params['FastTextBin'])
     # model={'testi1':np.zeros((300)),'testi2':np.zeros((300))}
-
     num_features = model.vector_size
-    number_of_documents = len(data)
-
        # p = mp.Pool(initializer=init, initargs=(a,anim))
+    word_matrix = {'vector': np.array([]), 'word': []}
+    X=[]
 
     print('Starting text vectorization')
-
-    func = partial(processInput, model=model,Params = Params,num_features=num_features)
-
-    X = []
     if 0:
         import multiprocessing
+
+        number_of_documents = len(data)
+        func = partial(processInput, model=model, Params=Params, num_features=num_features, word_matrix=word_matrix)
         pool = multiprocessing.Pool(2)
         results = pool.map_async(func, data.values)
         for i, mat in enumerate(results):
             X.append(mat)
     else:
-        for i, doc in enumerate(data):
+        for i,doc in enumerate(data):
             print('..processing document', i + 1)
-            X.append(func(doc))
+            x,word_matrix = processInput(doc, model, Params, word_matrix)
+            X.append(x)
 
     print('Done! Text vectorized')
 
-    return X
+    return X,word_matrix
 
+def get_word_embeddings(Params,docs):
+    print('Loading Fasttext model (this takes couple of minutes)')
+    model = FastText.load_fasttext_format(Params['FastTextBin'])
+    # model={'testi1':np.zeros((300)),'testi2':np.zeros((300))}
+    num_features = model.vector_size
+       # p = mp.Pool(initializer=init, initargs=(a,anim))
+    X = {}
+    for doc in docs:
+        for word in doc:
+            if word in X:
+                pass
+            elif word in model:
+                a=np.array(model[word],dtype=np.float32)
+                X[word] = a
+            else:
+                X[word] = None
+
+    return X
 
 def count_numbers(data):
     c=0
@@ -121,8 +132,8 @@ def construct_sentence(doc,Params):
                 sent.append(doc['tokens'][i])
             else:
                 sent.append(doc['tokens_raw'][i])                              
-        else:
-            sent.append('')
+        #else:
+        #    sent.append('')
     
     return all_sent
     
@@ -146,11 +157,12 @@ def custom_analyzer(doc,Params):
 def cut_empty_features(X,X_labels):
 
     count = np.sum(X,axis=0)
-    bad = count==0
-    X = np.delete(X,bad,axis=1)
-    X_labels = [x[0] for x in zip(X_labels,bad) if x[1]==False]                
+    good = count>0
+    X = X[:,good]
+    X_labels = [x[0] for x in zip(X_labels,good) if x[1]]
+    assert(len(X_labels)==X.shape[1])
     return X,X_labels
-                
+
 def main(data_in,Params):
             
 #    Params['UseCustomFeatures'] = 1
@@ -158,24 +170,44 @@ def main(data_in,Params):
 #    Params['WordSmoothing'] = 1
 #    Params['WordEmbedding'] = 1
 
-    feat = {}        
-        
+    feat = {}
+
     if Params['WordEmbedding'] == 1:
-        X, Y, Y_vec = convert_to_embedded(Params,data_in)
+
+        from sklearn.feature_extraction.text import CountVectorizer
+        #        vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))
+        Params['n-gram']=1
+        X=[]
+        for i in data_in:
+            X.append([x for x in custom_analyzer(i, Params)])
+
+        datafile = Params['OUTPUT-folder'] + '/embedded_data_temp.pickle'
+        if not os.path.isfile(datafile):
+            word2vec = get_word_embeddings(Params, X)
+            pickle.dump(word2vec,open(datafile,"wb"))
+        else:
+            word2vec = pickle.load(open(datafile, "rb"))
+
+        X_labels = list(word2vec.keys())
+        Params['embedding_dimension'] = 300
+
+        #X,X_labels = pool_embedded(doc_inds,Params,word_matrix)
+        feat['word2vec'] = word2vec
+        Y = np.zeros((len(X),1))
     else:        
         from sklearn.feature_extraction.text import CountVectorizer
 #        vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))    
         obj = CountVectorizer(analyzer=lambda x: custom_analyzer(x,Params),max_df=0.70,min_df=0.0025,max_features = 25000,ngram_range=(1,Params['n-gram']))    
         # test if it works
         X = obj.fit_transform(data_in)
-        
-        feat['X']=X
-        feat['X_labels'] = obj.get_feature_names()  
+        X_labels = obj.get_feature_names()
         feat['X_transformer'] = obj
-        
+        Y = np.zeros((X.shape[0], 1))
+
+    feat['X'] = X
+    feat['X_labels'] = X_labels
+
     print('Total %i main features created' % (len(feat['X_labels'])))
-    
-    Y= np.zeros((X.shape[0],1))
     for i,data in enumerate(data_in):
         Y[i] = data['target']        
     feat['Y'] = Y
@@ -199,12 +231,13 @@ def main(data_in,Params):
             k+=1            
             X[i,k]=L
             if i==0:
-                X_labels+=['Word count']                
-                
+                X_labels+=['Word count']
+
+            k+=1
             tags = [*Params['POS_TAGS']]
             x = count_POStags(data,tags)/L   
             X[i,k:(k+len(x))] = x
-            k+=len(x)
+            k+=len(x)-1
             if i==0:
                 X_labels+=tags                               
             
@@ -213,15 +246,16 @@ def main(data_in,Params):
             if i==0:
                 X_labels+=['Dictionary word count']
             
-            if Params['UseCustomFeatures']==1:
+            if Params['CUSTOMTagging']==1:
+                k+=1
                 tags = [*Params['CUSTOM_TAGS']]
                 x = count_customtags(data,tags)/L            
                 X[i,k:(k+len(x))] = x
-                k+=len(x)
+                k+=len(x)-1
                 if i==0:
                     X_labels+=tags
                     
-        X = X[:,0:k]
+        X = X[:,0:(k+1)]
         
         N_old = len(X_labels)
         X,X_labels = cut_empty_features(X,X_labels)        
