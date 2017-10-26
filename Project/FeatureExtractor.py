@@ -172,7 +172,7 @@ def main(data_in,Params):
 
     feat = {}
 
-    if Params['WordEmbedding'] == 1:
+    if Params['WordEmbedding'] is not 'none':
 
         from sklearn.feature_extraction.text import CountVectorizer
         #        vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))
@@ -181,23 +181,27 @@ def main(data_in,Params):
         for i in data_in:
             X.append([x for x in custom_analyzer(i, Params)])
 
-        datafile = Params['OUTPUT-folder'] + '/embedded_data_temp.pickle'
-        if not os.path.isfile(datafile):
-            word2vec = get_word_embeddings(Params, X)
-            pickle.dump(word2vec,open(datafile,"wb"))
+        if Params['WordEmbedding'] is not 'doc2vec':
+            datafile = Params['OUTPUT-folder'] + '/embedded_data_temp.pickle'
+            if not os.path.isfile(datafile):
+                word2vec = get_word_embeddings(Params, X)
+                pickle.dump(word2vec,open(datafile,"wb"))
+            else:
+                word2vec = pickle.load(open(datafile, "rb"))
+            X_labels = list(word2vec.keys())
+            Params['embedding_dimension'] = 300
+
+            #X,X_labels = pool_embedded(doc_inds,Params,word_matrix)
+            feat['word2vec'] = word2vec
         else:
-            word2vec = pickle.load(open(datafile, "rb"))
+            X_labels = 'doc2vec_vector'
 
-        X_labels = list(word2vec.keys())
-        Params['embedding_dimension'] = 300
-
-        #X,X_labels = pool_embedded(doc_inds,Params,word_matrix)
-        feat['word2vec'] = word2vec
         Y = np.zeros((len(X),1))
-    else:        
+    else:
+
         from sklearn.feature_extraction.text import CountVectorizer
 #        vect = CountVectorizer(max_df=0.85,min_df=0,max_features = 20000,ngram_range=(1,2))    
-        obj = CountVectorizer(analyzer=lambda x: custom_analyzer(x,Params),max_df=0.70,min_df=0.0025,max_features = 25000,ngram_range=(1,Params['n-gram']))    
+        obj = CountVectorizer(analyzer=lambda x: custom_analyzer(x,Params),max_df=0.70,min_df=0.0025,max_features = 50000,ngram_range=(1,Params['n-gram']))
         # test if it works
         X = obj.fit_transform(data_in)
         X_labels = obj.get_feature_names()

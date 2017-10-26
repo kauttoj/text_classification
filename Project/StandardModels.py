@@ -20,11 +20,15 @@ from nltk import tokenize
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer,TfidfVectorizer
 
+import gensim
+from gensim.models.doc2vec import TaggedDocument
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn import svm
 from sklearn.linear_model import LogisticRegression
+from sklearn.feature_selection import SelectFromModel
+from sklearn.feature_selection import SelectKBest, chi2
 
 from sklearn.pipeline import Pipeline
 from sklearn import metrics
@@ -198,18 +202,26 @@ class prepare_data(BaseEstimator, TransformerMixin):
         self.tfidf = TfidfTransformer()
             
     def fit(self,X, y=None):
-        dat = self.tfidf.fit_transform(X[:,0:-self.Params['n_custom_features']])   
+        if self.Params['n_custom_features']==0:
+            dat = self.tfidf.fit_transform(X)
+        else:
+            dat = self.tfidf.fit_transform(X[:,0:-self.Params['n_custom_features']])
         if self.Params['Compression']==1:
             self.decomposer.fit(dat)
         return self    
             
-    def transform(self,X):                    
-        dat = self.tfidf.transform(X[:,0:-self.Params['n_custom_features']])   
-        if self.Params['Compression']==1:
-            dat = self.decomposer.transform(dat)  
-            dat = np.concatenate((dat,X[:,-self.Params['n_custom_features']:].todense()),axis=1)
+    def transform(self,X):
+        if self.Params['n_custom_features'] == 0:
+            dat = self.tfidf.transform(X)
         else:
-            dat = scipy.sparse.hstack([dat,X[:,-self.Params['n_custom_features']:]])            
+            dat = self.tfidf.transform(X[:,0:-self.Params['n_custom_features']])
+        if self.Params['Compression']==1:
+            dat = self.decomposer.transform(dat)
+            if self.Params['n_custom_features'] > 0:
+                dat = np.concatenate((dat,X[:,-self.Params['n_custom_features']:].todense()),axis=1)
+        else:
+            if self.Params['n_custom_features'] > 0:
+                dat = scipy.sparse.hstack([dat,X[:,-self.Params['n_custom_features']:]])
         return dat
 
     # def fit_transform(self,X, y=None):
@@ -264,6 +276,37 @@ class IdentityTransformer(BaseEstimator, TransformerMixin):
     def transform(self, input_array, y=None):
         return input_array * 1
 
+class doc2vecTransformer(BaseEstimator, TransformerMixin):
+
+    def __init__(self, Params=None,dim=50):
+        self.Params = Params
+        self.model = None
+        self.dim = dim
+
+    def fit(self, X, y=None):
+        corpus = []
+        for i,x in enumerate(X):
+            corpus.append(TaggedDocument(x,[i]))
+
+        # # doc2vec parameters
+        # vector_size = 300
+        # window_size = 15
+        # min_count = 1
+        # sampling_threshold = 1e-5
+        # negative_size = 5
+        # train_epoch = 100
+        # dm = 0  # 0 = dbow; 1 = dmpv
+
+        self.model = gensim.models.doc2vec.Doc2Vec(size=self.dim,window = 12,dm = 0,negative = 5,sample = 1e-4,min_count=2, iter=100)
+        self.model.build_vocab(corpus)
+        self.model.train(corpus, total_examples=self.model.corpus_count, epochs=self.model.iter)
+        return self
+
+    def transform(self, X, y=None):
+        result = []
+        for i, doc in enumerate(X):
+            result.append(self.model.infer_vector(doc))
+        return result
 
 class MeanEmbeddingVectorizer(object):
     def __init__(self, word2vec):
@@ -341,6 +384,7 @@ def main(FEAT=None,Params=None):
     else:
         if Params['Algorithm'] == 'SVM':
             model = svm.SVC(kernel = 'linear',C = 0.01)
+            parameters = {'MODEL__C': [0.01,0.1,1.0,1.5]}
         if Params['Algorithm'] == 'NaiveBayes':
              model = MultinomialNB(alpha = 1.0)
              parameters = {'MODEL__alpha':[0.5,1.0]}
@@ -349,21 +393,21 @@ def main(FEAT=None,Params=None):
              parameters = {'MODEL__n_estimators':[50,100,150]}
         if Params['Algorithm'] == 'Neighbors':
             model = KNeighborsClassifier(n_neighbors=5,weights="uniform",algorithm ='auto', leaf_size = 30, p = 2, metric ='minkowski')
-            parameters = {'MODEL__n_neighbors':[3,5],'MODEL__leaf_size':[15,30,50]}
+            parameters = {'MODEL__n_neighbors':[3,5],'MODEL__leaf_size':[30]}
         if Params['Algorithm'] == 'SGD':
             model = SGDClassifier(loss='log',penalty='l2')
-            parameters = {'MODEL__penalty':['l1','l2'],'MODEL__alpha':[0.00005,0.0001],'MODEL__n_iter':[10]}
+            parameters = {'MODEL__penalty':['l2'],'MODEL__alpha':[0.00001,0.0001,0.001],'MODEL__n_iter':[10]}
         if Params['Algorithm'] == 'Logistic':
             model = LogisticRegression()
-            parameters = {'MODEL__penalty': ['l2'],'MODEL__C':[0.3,0.5,0.7]}
+            parameters = {'MODEL__penalty': ['l1','l2'],'MODEL__C':[0.7,1.0]}
         if Params['Algorithm'] == 'ExtraTrees':   
             model = ExtraTreesClassifier(n_estimators=100)   
             parameters = {'MODEL__n_estimators':[50,100,150]}
         if Params['Algorithm'] == 'Ensemble':
              raise('not present!')
     #
-    if Params['Compression']==1:
-        parameters['PREPARATOR__n_components'] = [200]
+    if Params['Compression']==1 and Params['WordEmbedding'] is 'none':
+        parameters['PREPARATOR__n_components'] = [150]
         
     #decomposer = LatentDirichletAllocation(n_topics=10, max_iter=10,learning_method='online',learning_offset=50.,random_state=1)
     #decomposer = NMF(n_components=50, random_state=1,alpha=.1, l1_ratio=.5)
@@ -407,8 +451,12 @@ def main(FEAT=None,Params=None):
 
     Y = FEAT['Y'].ravel()
 
-    if Params['WordEmbedding'] == 1:
-        PIPE = Pipeline([("PREPARATOR", TfidfEmbeddingVectorizer(Params,FEAT)),("MODEL", model)])
+    if Params['WordEmbedding'] is not 'none':
+        if Params['WordEmbedding'] is not 'doc2vec':
+            PIPE = Pipeline([("PREPARATOR", TfidfEmbeddingVectorizer(Params,FEAT)),("MODEL", model)])
+        else:
+            PIPE = Pipeline([("PREPARATOR", doc2vecTransformer(Params,50)), ("MODEL", model)])
+            parameters['PREPARATOR__dim']=[150]
     else:
         PIPE = Pipeline([("PREPARATOR", prepare_data(Params)),("MODEL", model)])
 
@@ -420,7 +468,7 @@ def main(FEAT=None,Params=None):
         k+=1
         print('...fold',k)
 
-        if Params['WordEmbedding'] == 1:
+        if Params['WordEmbedding'] is not 'none':
             XX = [X[i] for i in train_indices]
         else:
             XX = X[train_indices,:]
@@ -428,7 +476,7 @@ def main(FEAT=None,Params=None):
         
         t0 = time()                
         
-        grid_search = GridSearchCV(PIPE, parameters, n_jobs=3, verbose=1,cv=10)        
+        grid_search = GridSearchCV(PIPE, parameters, n_jobs=3, verbose=1,cv=10,refit=True)
         grid_search.fit(X=XX,y=YY)
         best_parameters.append(grid_search.best_estimator_.get_params())        
         #PIPE.fit(X=XX,y=YY)
@@ -437,7 +485,7 @@ def main(FEAT=None,Params=None):
         
         print('.....training done in %0.3fs' % (time() - t0))
 
-        if Params['WordEmbedding'] == 1:
+        if Params['WordEmbedding'] is not 'none':
             XX = [X[i] for i in test_indices]
         else:
             XX = X[test_indices,:]

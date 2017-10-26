@@ -11,7 +11,7 @@ import pickle
 import os
 
 if __name__ == "__main__":        
-    #__spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
     
     SKIP_PRESTORED = 0
     
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     
     # how to preprocess text before classification
     # Note: this only takes effect after analyzing raw text
-    Params['CUSTOMTagging'] = 1 # use tagged words instead of original ones
+    Params['CUSTOMTagging'] = 0 # use tagged words instead of original ones
     Params['Lemmatize'] = 1 # use lemmatized words
     Params['RemoveStops'] = 0 # remove all stop words from analysis
     Params['RemovePunctuation'] = 1 # remove punctuation (still keep sentences)
@@ -37,13 +37,12 @@ if __name__ == "__main__":
     #Params['TF-IDFScaling'] = 1 # do TF-IDF scaling
     Params['n-gram'] = 2 # n-gram level
     #Params['WordSmoothing'] = 1
-    Params['Compression'] = 0  # apply SVD to word matrix before
+    Params['Compression'] = 1  # apply SVD to word matrix before classification/regression
     
-    Params['WordEmbedding'] = 1 # 0 = use discrete BOW, 1 = use FastText with tf-idf
-    Params['WordEmbedding_PCA'] = 1  # apply PCA to word embeddings before pooling
-    
+    Params['WordEmbedding'] = 'doc2vec' # 'pca','doc2vec'
+
     # main test/train split degree
-    Params['CV-folds'] = 15
+    Params['CV-folds'] = 10
     
     # How to treat target vector
     #Params['TargetType'] = 'regression'
@@ -54,8 +53,8 @@ if __name__ == "__main__":
     #Params['Algorithm'] = 'SVM'
     #Params['Algorithm'] = 'NaiveBayes'
     #Params['Algorithm'] = 'RandomForest'
-    #Params['Algorithm'] = 'Logistic'
-    Params['Algorithm'] = 'SGD'
+    Params['Algorithm'] = 'Logistic'
+    #Params['Algorithm'] = 'SGD'
     #Params['Algorithm'] = 'Neighbors'
     #Params['Algorithm'] = 'ExtraTrees'
     #Params['Algorithm'] = 'Ensemble'
@@ -94,7 +93,10 @@ if __name__ == "__main__":
     
     import FeatureExtractor
     FEAT = FeatureExtractor.main(data,Params)
-    
+
+    datafile = Params['OUTPUT-folder'] + '/FEAT_data.pickle'
+    pickle.dump((FEAT,Params), open(datafile, "wb"))
+
     if Params['Algorithm'] is 'LSTM':
         
         raise('not yet implemented!')
