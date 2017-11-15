@@ -1,2 +1,3 @@
 # text_classification
-my_text_analysis
+
+Some codes for preprocessing and supervised text analysis.
