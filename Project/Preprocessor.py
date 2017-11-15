@@ -10,11 +10,15 @@ import numpy as np
 import re
 from nltk import wordpunct_tokenize
 from nltk import sent_tokenize
-import string
 import nltk
 import math
+from string import punctuation as punctuation_list
+
+from gensim.models.wrappers import FastText
 
 stopword_list = nltk.corpus.stopwords.words('finnish')
+
+eos_marker_list = ['!','"','\'','.',':','?']
 
 import sys
 
@@ -26,12 +30,15 @@ from omorfi.omorfi import Omorfi
 omorfi = Omorfi()
 omorfi.load_from_dir()
 
-USE_SECO_LEMMER = 1
+USE_SECO_LEMMER = 0
+USE_EMBEDDING=1
 
 def tokenize(document,Params):
     
     sentence_id = []
-    is_char = []
+    is_punct = []
+    is_eos_punct = []
+    is_eos_token = []
     is_number = []
     tokens = []
     skip_space = []
@@ -66,10 +73,9 @@ def tokenize(document,Params):
         n_tokens_sent=0
         k+=1
         # Break the sentence into part of speech tagged tokens
-        sent_tokens = sent.split(' ')                
+        sent_tokens = sent.split(' ')
         for i,token_piece in enumerate(sent_tokens):
             token_piece = wordpunct_tokenize(token_piece)
-            
             for j,token in enumerate(token_piece):
                 
                 if j>0:
@@ -83,18 +89,32 @@ def tokenize(document,Params):
                 sentence_id.append(k)            
                 tokens.append(token)
     
-                # If punctuation, ignore token and continue            
-                if all(char in string.punctuation for char in token) or all(not(char.isalpha()) for char in token) or len(token)<2:
-                    is_char.append(0)
+                # If punctuation, ignore token and continue       
+                if token in eos_marker_list:
+                    is_eos_punct.append(1)
                 else:
-                    is_char.append(1)
+                    is_eos_punct.append(0)
+            
+                if all(char in punctuation_list for char in token):
+                    is_punct.append(1)
+                else:
+                    is_punct.append(0)
+                    
+#                if all(not(char.isalpha()) for char in token):
+#                    is_char.append(0)
+#                else:
+#                    is_char.append(1)
                     
                 try:
-                    _ = np.float(token)   
+                    _ = np.float(token)
                     is_number.append(1)
                 except:       
-                    is_number.append(0)                      
-                    
+                    is_number.append(0)
+
+                is_eos_token.append(0)
+                
+            is_eos_token[-1]=1
+
     tokens_raw = tokens.copy()                    
     tokens_raw = [t.lower() for t in tokens_raw]
                     
@@ -112,7 +132,7 @@ def tokenize(document,Params):
     if len(document_rec)!=len(document):
         print('    !!! White space reconstruction FAILED! Original length %i, reco length %i !!!' % (len(document_rec),len(document)))
             # Lemmatize the token and yield
-    return {'tokens':tokens,'sentence_id':sentence_id,'is_char':is_char,'is_number':is_number,'skip_space':skip_space,'tokens_raw':tokens_raw}
+    return {'tokens':tokens,'sentence_id':sentence_id,'is_punct':is_punct,'is_eos_punct':is_eos_punct,'is_eos_token': is_eos_token,'is_number':is_number,'skip_space':skip_space,'tokens_raw':tokens_raw}
 
 def remove_text_inside_brackets(text, brackets="{}()[]"):
     count = [0] * (len(brackets) // 2) # count open/close brackets
@@ -131,22 +151,38 @@ def remove_text_inside_brackets(text, brackets="{}()[]"):
                 saved_chars.append(character)
     return ''.join(saved_chars)        
     
-def lemmatize_omorfi(tokens_in,dictionary_lookup=0):
+def lemmatize_omorfi(Params,tokens_in,dictionary_lookup=0,model=None):
 
-    is_word = tokens_in['is_char']
-    tokens = tokens_in['tokens']    
+    is_word = ((np.array(tokens_in['is_number'])==0)*(np.array(tokens_in['is_punct'])==0)).tolist()
+    
+    tokens = tokens_in['tokens']
     in_dictionary = [0]*len(tokens)
 
     for i,token in enumerate(tokens):        
         if is_word[i]==1:
             res = omorfi.lemmatise(token)
             if dictionary_lookup==0:
-                tokens[i]=remove_text_inside_brackets(res[-1][0])
+                if USE_EMBEDDING==1:
+                    w_best = ''
+                    sim_best = -1
+                    for elem in res:
+                        w = remove_text_inside_brackets(elem[0])
+                        try:
+                            sim=model.wv.similarity(token.lower(),w)
+                        except:
+                            sim=0
+                        if sim > sim_best:
+                            sim_best=sim
+                            w_best=w                
+                    tokens[i]=w_best
+                    assert(sim_best>-1)
+                else:                    
+                    tokens[i]=remove_text_inside_brackets(res[-1][0])
+                    
             if float(res[-1][1]) != math.inf:
-                in_dictionary[i]=1
-                
-    if dictionary_lookup==1:
-        return in_dictionary
+                in_dictionary[i]=1                                            
+                       
+    tokens_in['in_dictionary'] = in_dictionary         
     
 # Function to lemmatize finnish text using online tool http://demo.seco.tkk.fi/las/
 # useful for short texts, not for very large corpuses!
@@ -156,7 +192,7 @@ def lemmatize_omorfi(tokens_in,dictionary_lookup=0):
 def lemmatize_seco(tokens_in):
     
     tokens = tokens_in['tokens']
-    is_word = tokens_in['is_char']
+    is_word = ((np.array(tokens_in['is_number'])==0)*(np.array(tokens_in['is_punct'])==0)).tolist()
     
     from urllib.request import urlopen
     from urllib.parse import quote
@@ -219,9 +255,9 @@ def lemmatize_seco(tokens_in):
     print('SeCo lemmatizer: Document with %i words lemmatized in %0.1f seconds (using %i parts)' % (N_orig,elapsed,k))
     
     tokens_in['tokens']=new_tokens
-    tokens_in['in_dictionary'] = lemmatize_omorfi(tokens_in,dictionary_lookup=1)
+    lemmatize_omorfi(tokens_in,dictionary_lookup=1)
     
-    assert(len(tokens_in['tokens'])==len(tokens_in['is_char'])==len(tokens_in['in_dictionary']))
+    assert(len(tokens_in['tokens'])==len(is_word)==len(tokens_in['in_dictionary']))
         
 def mark_stopwords(tokens):        
     is_stopword=[0]*len(tokens['tokens'])
@@ -232,8 +268,10 @@ def mark_stopwords(tokens):
     
 def pos_tagging(tokens_in):        
     tags = []
+    is_word = ((np.array(tokens_in['is_number'])==0)*(np.array(tokens_in['is_punct'])==0)).tolist()
+    
     for i,tok in enumerate(tokens_in['tokens']):
-        if tokens_in['is_char'][i]==0:
+        if is_word[i]==0:
             tags.append('') 
             continue        
         res = omorfi.analyse(tok)
@@ -251,6 +289,11 @@ def pos_tagging(tokens_in):
             
     tokens_in['POS_tags']=tags
 
+def load_embedding(Params):
+    
+    model = FastText.load_fasttext_format(Params['FastTextBin'])
+    return model    
+    
 def main(Params):
                 
     text=[]
@@ -285,6 +328,10 @@ def main(Params):
                          
     POS_tags = []
     
+    model = None
+    if USE_EMBEDDING==1:
+       model = load_embedding(Params)
+    
     data = []
     for i in range(0,len(text)):    
         
@@ -295,7 +342,7 @@ def main(Params):
         tokens['raw_text'] = text[i]
         tokens['meta_information'] = text_meta[i]
         tokens['target'] = Y[i]
-        tokens['tokens_raw'] = tokens['tokens']    
+        tokens['tokens_raw'] = tokens['tokens'].copy()
         
         print('tokenization done')
         mark_stopwords(tokens)
@@ -303,7 +350,7 @@ def main(Params):
         if USE_SECO_LEMMER==1:
             lemmatize_seco(tokens)
         else:
-            lemmatize_omorfi(tokens)
+            lemmatize_omorfi(Params,tokens,0,model=model)
         print('Lemmatization done')
         pos_tagging(tokens)
         print('POS tagging done')        
@@ -319,10 +366,11 @@ def main(Params):
     
     Params['POS_TAGS'] = POS_tags
     Params['stopword_list'] = stopword_list
+    Params['eos_marker_list'] = eos_marker_list
+    Params['punctuation_list'] = punctuation_list
         
     print('\n-- Data summary: %i text processed\n' % len(data))
-    
-    
+        
     #data = shuffle(data)
     
     return data

@@ -29,20 +29,23 @@ if __name__ == "__main__":
     # how to preprocess text before classification
     # Note: this only takes effect after analyzing raw text
     Params['CUSTOMTagging'] = 0 # use tagged words instead of original ones
-    Params['Lemmatize'] = 1 # use lemmatized words
+    Params['Lemmatize'] = 0 # use lemmatized words
     Params['RemoveStops'] = 0 # remove all stop words from analysis
-    Params['RemovePunctuation'] = 1 # remove punctuation (still keep sentences)
+    Params['RemovePunctuation'] = 0 # remove punctuation (still keep sentences)
     
     Params['UseCustomFeatures'] = 0 # include custom features in the model
     #Params['TF-IDFScaling'] = 1 # do TF-IDF scaling
-    Params['n-gram'] = 2 # n-gram level
+    Params['n-gram'] = 2 # n-gram level (only for BOW)
     #Params['WordSmoothing'] = 1
-    Params['Compression'] = 1  # apply SVD to word matrix before classification/regression
     
-    Params['WordEmbedding'] = 'doc2vec' # 'pca','doc2vec'
+    Params['Compress'] = 0  # apply SVD to word matrix before classification/regression
+    
+    Params['WordEmbedding'] = 'doc2vec' # 'none','word2vec','word2vec_pca','doc2vec'
+    
+    Params['Normalize'] = 0  # standardize data before training
 
     # main test/train split degree
-    Params['CV-folds'] = 10
+    Params['CV-folds'] = 20
     
     # How to treat target vector
     #Params['TargetType'] = 'regression'
@@ -50,11 +53,11 @@ if __name__ == "__main__":
     #Params['TargetType'] = 'classification_multilabel'
     
     ## BOW type (n-grams + custom features)
-    #Params['Algorithm'] = 'SVM'
+    #Params['Algorithm'] = 'SVC'
     #Params['Algorithm'] = 'NaiveBayes'
     #Params['Algorithm'] = 'RandomForest'
     Params['Algorithm'] = 'Logistic'
-    #Params['Algorithm'] = 'SGD'
+    #Params['Algorithm'] = 'SGD'  # NOT RECOMMENDED FOR SMALL DATASETS
     #Params['Algorithm'] = 'Neighbors'
     #Params['Algorithm'] = 'ExtraTrees'
     #Params['Algorithm'] = 'Ensemble'
@@ -64,17 +67,19 @@ if __name__ == "__main__":
     #Params['Algorithm'] = 'Fasttext'
     
     ## NN type (embedded words + custom features)
-    #Params['Algorithm'] = 'RNN'
+    #Params['Algorithm'] = 'RNN' # 'LSTM' 'CNN', 'GRU'
     
-    
-    Params['INPUT-folder'] = r'D:/JanneK/Documents/git_repos/text_classification/data/pikkudata'
-    Params['OUTPUT-folder'] = r'D:/JanneK/Documents/git_repos/text_classification/Project/results'
-
-    Params['FastTextBin'] = r'D:/JanneK/Documents/git_repos/text_classification/data/wiki.fi'
-
-    #Params['INPUT-folder'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata'
-    #Params['OUTPUT-folder'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/Project/results'
-    
+    try:
+        Params['INPUT-folder'] = r'D:/JanneK/Documents/git_repos/text_classification/data/pikkudata'
+        Params['INPUT-folder-processed'] = r'D:/JanneK/Documents/git_repos/text_classification/data/pikkudata/processed'
+        Params['OUTPUT-folder'] = r'D:/JanneK/Documents/git_repos/text_classification/Project/results'
+        Params['FastTextBin'] = r'D:/JanneK/Documents/git_repos/text_classification/data/wiki.fi'
+        assert(os.path.isdir(Params['OUTPUT-folder']))
+    except:
+        Params['INPUT-folder'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata'
+        Params['OUTPUT-folder'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/Project/results'
+        Params['INPUT-folder-processed'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/pikkudata/processed'
+        Params['FastTextBin'] = r'/media/jannek/Data/JanneK/Documents/git_repos/text_classification/data/wiki.fi'
     #%% Start pipeline
     
     if Params['Algorithm'] == 'RNN':
@@ -90,7 +95,7 @@ if __name__ == "__main__":
         data,Params_loaded = pickle.load(open( datafile, "rb" ))
         Params['POS_TAGS'] = Params_loaded['POS_TAGS']
         Params['stopword_list'] = Params_loaded['stopword_list']
-    
+                
     import FeatureExtractor
     FEAT = FeatureExtractor.main(data,Params)
 
